@@ -77,22 +77,45 @@
           {% if problems %}
           <div class="row g-3">
             {% for problem in problems %}
-            <div class="col-md-6">
-              <div class="card bg-transparent text-white border 
-                          {% if problem.problem_type == 'Quiz' %}border-success{% else %}border-warning{% endif %}
-                          rounded-3 p-3 shadow-sm h-100 problem-card"
-                   data-problem-id="{{ problem.problem_id }}"
-                   style="cursor: pointer;">
-                <div class="d-flex justify-content-between align-items-start">
-                  <h6 class="fw-bold mb-2 text-white">{{ problem.problem_title }}</h6>
-                  <span class="badge 
-                    {% if problem.problem_type == 'Quiz' %}bg-success{% else %}bg-warning text-dark{% endif %}">
-                    Due: {{ problem.due_date|date:"M d, Y H:i" }}
-                  </span>
-                </div>
-              </div>
-            </div>
-            {% endfor %}
+<div class="col-md-6">
+  <div class="card bg-transparent text-white border 
+              {% if problem.problem.problem_type == 'Quiz' %}border-success{% else %}border-warning{% endif %}
+              rounded-3 p-3 shadow-sm h-100 problem-card"
+       data-problem-id="{{ problem.problem.problem_id }}"
+       style="cursor: pointer; position: relative;">
+
+    <div class="d-flex justify-content-between align-items-start">
+      <h6 class="fw-bold mb-2 text-white">{{ problem.problem.problem_title }}</h6>
+
+   {% if problem.score is not None %}
+  {% if problem.score >= problem.half_score %}
+    <h5 class="fw-bold text-success">{{ problem.score }}/{{ problem.problem.total_score }}</h5>
+  {% else %}
+    <h5 class="fw-bold text-danger">{{ problem.score }}/{{ problem.problem.total_score }}</h5>
+  {% endif %}
+{% else %}
+  <h6 class="text-muted">No score yet</h6>
+{% endif %}
+
+
+
+
+      <span class="badge 
+        {% if problem.problem.problem_type == 'Quiz' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+        Due: {{ problem.problem.due_date|date:"M d, Y H:i" }}
+      </span>
+    </div>
+
+    <!-- Centered Score Display -->
+  
+
+    <!-- Disabled Answer Button if already submitted -->
+  
+
+  </div>
+</div>
+{% endfor %}
+
           </div>
           {% else %}
           <div class="p-3 rounded-3 text-center text-muted"
@@ -172,10 +195,11 @@
 
     
       <!-- Footer -->
-      <div class="modal-footer border-0 d-flex justify-content-between pt-0">
-        <button type="button" class="btn btn-outline-light px-4" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-success px-4" id="answerButton">Answer</button>
-      </div>
+    <div class="modal-footer border-0 d-flex justify-content-between pt-0">
+  <button type="button" class="btn btn-outline-light px-4" data-bs-dismiss="modal">Cancel</button>
+  <button type="button" class="btn btn-success px-4" id="answerButton">Answer</button>
+</div>
+
 
 
     </div>
@@ -239,6 +263,7 @@ document.querySelectorAll('.problem-card').forEach(card => {
     fetch(`/problem/${problemId}/details/`)
       .then(res => res.json())
       .then(data => {
+        // Fill in modal data
         document.getElementById('problem_title').textContent = data.title;
         document.getElementById('problem_description').textContent = data.description;
         document.getElementById('problem_type').textContent = data.type;
@@ -254,27 +279,45 @@ document.querySelectorAll('.problem-card').forEach(card => {
           col.className = 'col-12';
           col.innerHTML = `
             <div class="p-2 mb-2 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
-              <strong>Input ${index+1}:</strong>
+              <strong>Input ${index + 1}:</strong>
               <pre style="margin:0; white-space:pre-wrap;">${tc.input}</pre>
             </div>
             <div class="p-2 mb-3 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
-              <strong>Output ${index+1}:</strong>
+              <strong>Output ${index + 1}:</strong>
               <pre style="margin:0; white-space:pre-wrap;">${tc.output}</pre>
             </div>
           `;
           container.appendChild(col);
         });
 
-        // Set Answer button link dynamically
+        // Get reference to Answer button
         const answerBtn = document.getElementById('answerButton');
+
+        // ✅ Disable button if problem already answered
+        if (data.answered === true) {
+          answerBtn.disabled = true;
+          answerBtn.textContent = "Answered";
+          answerBtn.classList.remove("btn-success");
+          answerBtn.classList.add("btn-secondary");
+        } else {
+          answerBtn.disabled = false;
+          answerBtn.textContent = "Answer";
+          answerBtn.classList.add("btn-success");
+          answerBtn.classList.remove("btn-secondary");
+        }
+
+        // Set Answer button link dynamically
         answerBtn.onclick = () => {
-          window.location.href = `/playground/${problemId}/`;
+          if (!data.answered) {
+            window.location.href = `/playground/${problemId}/`;
+          }
         };
 
         // Show modal
         const modal = new bootstrap.Modal(document.getElementById('problemDetailsModal'));
         modal.show();
-      });
+      })
+      .catch(err => console.error('Error fetching problem details:', err));
   });
 });
 </script>

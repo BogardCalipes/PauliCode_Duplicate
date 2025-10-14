@@ -3,9 +3,11 @@ from .models import User, Class, Problem, Enrollment, ProblemTestCase, Submissio
 from django.contrib import messages
 from datetime import datetime
 from django.http import JsonResponse 
-import json, requests   
+import json, requests, subprocess, tempfile, os   
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+from django.urls import reverse
+from django.core.serializers.json import DjangoJSONEncoder
 
 # ---------------- LOGIN & DASHBOARD ---------------- #
 
@@ -322,11 +324,24 @@ def add_problem(request, class_id):
 
 #--------------------------Problem Details---------------------------------#
 
+                #Works for both Students and Teachers
+
 def get_problem_details(request, problem_id):
-    """Return JSON data for a specific problem (used in modal)."""
+    """Return problem details as JSON (used in both Teacher and Student modals)."""
     problem = get_object_or_404(Problem, pk=problem_id)
     test_cases = ProblemTestCase.objects.filter(problem_id=problem)
 
+    # Default value
+    answered = False
+
+    # Check if the logged-in user is a student and has submitted this problem
+    school_id = request.session.get('school_id')
+    if school_id:
+        user = User.objects.filter(school_id=school_id).first()
+        if user and user.user_type == "Student":
+            answered = Submission.objects.filter(problem_id=problem, student_id=user).exists()
+
+    # Prepare data
     data = {
         "problem_id": problem.problem_id,
         "title": problem.problem_title,
@@ -334,11 +349,13 @@ def get_problem_details(request, problem_id):
         "type": problem.problem_type,
         "score": problem.total_score,
         "time_limit": problem.time_limit,
-        "due_date": problem.due_date.strftime("%Y-%m-%dT%H:%M"),
+        "due_date": problem.due_date.strftime("%Y-%m-%d %H:%M"),
+        "answered": answered,  # ✅ Student-specific info only if applicable
         "test_cases": [
-            {"input": t.input_data, "output": t.expected_output} for t in test_cases
+            {"input": tc.input_data, "output": tc.expected_output} for tc in test_cases
         ]
     }
+
     return JsonResponse(data)
 
 
@@ -474,37 +491,55 @@ def join_class(request):
 #---------------STUDENT CLASS DETAILS PAGE---------------------#
 
 def student_class_details(request, class_id):
+    # Make sure the student is logged in
     school_id = request.session.get('school_id')
     if not school_id:
         messages.warning(request, "Please log in first.")
         return redirect('index')
 
-    student = get_object_or_404(User, school_id=school_id)
+    # Get student and class instance
+    enrollment = get_object_or_404(Enrollment, student_id__school_id=school_id, class_id=class_id)
+    student = enrollment.student_id
+    class_instance = get_object_or_404(Class, pk=class_id)
 
-    # Ensure the student is enrolled in this class
-    class_obj = get_object_or_404(Class, class_id=class_id, enrollment__student_id=student)
-
-    # Get problems for this class
-    problems = Problem.objects.filter(class_id=class_obj).order_by('-problem_id')
-
-    # Optional: Apply search/filter if needed
+    # Search and filter handling
     query = request.GET.get('q', '').strip()
     filter_type = request.GET.get('filter', '').strip()
+
+    problems = Problem.objects.filter(class_id=class_instance).order_by('-problem_id')
     if query:
         problems = problems.filter(problem_title__icontains=query)
-    if filter_type == 'Assignment':
-        problems = problems.filter(problem_type='Assignment')
-    elif filter_type == 'Quiz':
-        problems = problems.filter(problem_type='Quiz')
+    if filter_type:
+        problems = problems.filter(problem_type=filter_type)
 
-    return render(request, 'Students/student_class_details.html', {
-        'user': student,
-        'class': class_obj,
-        'problems': problems,
+    # Prepare problems + submission info
+    problem_data = []
+    for p in problems:
+        submission = Submission.objects.filter(
+            student_id=student,
+            problem_id=p
+            
+        ).order_by('-submission_id').first()
+
+        half_score = p.total_score / 2
+
+        problem_data.append({
+            'problem': p,
+            'score': submission.score if submission else None,
+            'answered': submission is not None,
+            'half_score': half_score, 
+        })
+
+    context = {
+        'user': student,                     # ✅ Added this for StudentSidebar
+        'class': class_instance,
+        'problems': problem_data,
         'query': query,
         'filter_type': filter_type,
-        'currentpage': 'StudentClass',
-    })
+        'currentpage': 'StudentClass',       # ✅ Keeps sidebar highlighting correct
+    }
+
+    return render(request, 'Students/student_class_details.html', context)
 
 #------------------Unenroll Function--------------------#
 def unenroll_class(request, class_id):
@@ -546,19 +581,19 @@ def playground(request, problem_id):
 # ---------------- RUN & CHECK CODE ---------------- #
 @csrf_exempt
 def run_playground_code(request):
-    """
-    Handles Run Code and Check Code actions:
-    - Run Code: executes student's code and returns output
-    - Check Code: runs all test cases, computes score, and saves Submission
-    """
     if request.method != "POST":
         return JsonResponse({"error": "Invalid request method."}, status=400)
 
-    data = json.loads(request.body)
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON."}, status=400)
+
     code = data.get("code", "")
     language = data.get("language", "python")
     check_mode = data.get("check_mode", False)
     problem_id = data.get("problem_id")
+    stdin = data.get("stdin", "")
     student_id = request.session.get("school_id")
 
     if not student_id:
@@ -566,150 +601,177 @@ def run_playground_code(request):
 
     student = get_object_or_404(User, school_id=student_id)
 
-    # ---------- RUN CODE ONLY ----------
-    if not check_mode:
-        try:
-            response = requests.post(PISTON_URL, json={
-                "language": language,
-                "version": "*",
-                "files": [{"content": code}]
-            })
-            result = response.json()
-            output = result.get("run", {}).get("output", "No output.")
-            return JsonResponse({"output": output})
-        except Exception as e:
-            return JsonResponse({"error": f"Execution error: {e}"}, status=500)
-
-    # ---------- CHECK CODE (with test cases) ----------
-    problem = get_object_or_404(Problem, pk=problem_id)
-    test_cases = ProblemTestCase.objects.filter(problem_id=problem)
-
-    if not test_cases.exists():
-        return JsonResponse({"error": "No test cases found."}, status=404)
-
-    passed = 0
-    total = test_cases.count()
-    results = []
-
-    for idx, tc in enumerate(test_cases, start=1):
-        try:
-            response = requests.post(PISTON_URL, json={
+    # ---------- RUN CODE ----------
+    try:
+        response = requests.post(
+            PISTON_URL,
+            json={
                 "language": language,
                 "version": "*",
                 "files": [{"content": code}],
-                "stdin": tc.input_data
-            })
-            result = response.json()
-            output = result.get("run", {}).get("output", "").strip()
-        except Exception as e:
-            output = f"Error: {e}"
+                "stdin": stdin
+            },
+            timeout=10
+        )
+        response.raise_for_status()
+        result = response.json()
+        output = result.get("run", {}).get("output", "").strip()
+    except Exception as e:
+        return JsonResponse({"error": f"Execution error: {e}"}, status=500)
 
-        expected = tc.expected_output.strip()
+    # ---------- CHECK CODE ----------
+    if check_mode:
+        if not problem_id:
+            return JsonResponse({"error": "Problem ID required for check mode."}, status=400)
 
-        if output == expected:
-            passed += 1
-            results.append(f"✅ Test {idx}: Passed")
-        else:
-            results.append(
-                f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {output}"
-            )
+        problem = get_object_or_404(Problem, pk=problem_id)
+        test_cases = ProblemTestCase.objects.filter(problem_id=problem)
 
-    # ---------- Compute & Save Score ----------
-    total_score = problem.total_score
-    score_per_case = total_score / total if total > 0 else 0
-    final_score = int(round(passed * score_per_case))
+        if not test_cases.exists():
+            return JsonResponse({"error": "No test cases found."}, status=404)
 
-    # Update or Create submission
-    Submission.objects.update_or_create(
-        problem_id=problem,
-        student_id=student,
-        defaults={
-            "code": code,
-            "score": final_score,
-            "submitted_at": timezone.now()
-        }
-    )
+        passed = 0
+        total = test_cases.count()
+        results = []
 
-    summary = f"{passed}/{total} test cases passed.\nScore: {final_score}/{total_score}"
-    return JsonResponse({
-        "result_summary": "\n".join(results) + "\n\n" + summary,
-        "score": final_score,
-        "passed": passed,
-        "total": total
-    })
+        for idx, tc in enumerate(test_cases, start=1):
+            try:
+                resp = requests.post(PISTON_URL, json={
+                    "language": language,
+                    "version": "*",
+                    "files": [{"content": code}],
+                    "stdin": tc.input_data
+                }, timeout=10)
+                resp.raise_for_status()
+                r = resp.json()
+                output_tc = r.get("run", {}).get("output", "").strip()
+            except Exception as e:
+                output_tc = f"Error: {e}"
+
+            expected = tc.expected_output.strip()
+            if output_tc == expected:
+                passed += 1
+                results.append(f"✅ Test {idx}: Passed")
+            else:
+                results.append(f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {output_tc}")
+
+        summary = f"{passed}/{total} test cases passed."
+        return JsonResponse({
+            "result_summary": "\n".join(results) + "\n" + summary,
+            "passed": passed,
+            "total": total
+        })
+
+    return JsonResponse({"output": output})
+
+
+
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+from django.urls import reverse
+from django.utils import timezone
+import tempfile, subprocess, os, json
+
+from .models import Problem, ProblemTestCase, Submission, User
+
 
 @csrf_exempt
 def submit_problem(request):
-    """
-    Handles problem submission by student.
-    Checks test cases, calculates score, and saves Submission.
-    """
     if request.method != "POST":
-        return JsonResponse({"error": "Invalid request method."}, status=400)
+        return JsonResponse({"success": False, "message": "Invalid request method."}, status=400)
 
-    data = json.loads(request.body)
-    code = data.get("code", "")
-    language = data.get("language", "python")
-    problem_id = data.get("problem_id")
-    student_id = request.session.get("school_id")
+    try:
+        data = json.loads(request.body)
+        code = data.get("code", "")
+        problem_id = data.get("problem_id")
+        language = data.get("language", "python")
 
-    if not student_id:
-        return JsonResponse({"error": "You must be logged in."}, status=403)
+        if not code.strip():
+            return JsonResponse({"success": False, "message": "Code cannot be empty."}, status=400)
 
-    student = get_object_or_404(User, school_id=student_id)
-    problem = get_object_or_404(Problem, pk=problem_id)
-    test_cases = ProblemTestCase.objects.filter(problem_id=problem)
+        # ✅ Validate problem
+        problem = get_object_or_404(Problem, pk=problem_id)
 
-    if not test_cases.exists():
-        return JsonResponse({"error": "No test cases found."}, status=404)
+        # ✅ Get logged-in student
+        student_id = request.session.get('school_id')
+        if not student_id:
+            return JsonResponse({"success": False, "message": "User not logged in."}, status=403)
+        student = get_object_or_404(User, school_id=student_id)
 
-    passed = 0
-    total = test_cases.count()
-    results = []
+        # ✅ Retrieve test cases for the problem
+        test_cases = ProblemTestCase.objects.filter(problem_id=problem)
+        if not test_cases.exists():
+            return JsonResponse({"success": False, "message": "No test cases found for this problem."}, status=404)
 
-    for idx, tc in enumerate(test_cases, start=1):
-        try:
-            response = requests.post(PISTON_URL, json={
-                "language": language,
-                "version": "*",
-                "files": [{"content": code}],
-                "stdin": tc.input_data
-            })
-            result = response.json()
-            output = result.get("run", {}).get("output", "").strip()
-        except Exception as e:
-            output = f"Error: {e}"
+        # ✅ Save student code temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as temp_file:
+            temp_file.write(code.encode('utf-8'))
+            temp_path = temp_file.name
 
-        expected = tc.expected_output.strip()
+        # ✅ Initialize counters
+        score = 0
+        passed_cases = 0
+        total_cases = test_cases.count()
 
-        if output == expected:
-            passed += 1
-            results.append(f"✅ Test {idx}: Passed")
-        else:
-            results.append(
-                f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {output}"
-            )
+        # ✅ Loop through each test case
+        for tc in test_cases:
+            try:
+                result = subprocess.run(
+                    ["python", temp_path],
+                    input=tc.input_data,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
 
-    # Compute final score
-    total_score = problem.total_score
-    score_per_case = total_score / total if total > 0 else 0
-    final_score = int(round(passed * score_per_case))
+                output = result.stdout.strip()
+                error = result.stderr.strip()
 
-    # Save submission
-    Submission.objects.update_or_create(
-        problem_id=problem,
-        student_id=student,
-        defaults={
-            "code": code,
-            "score": final_score,
-            "submitted_at": timezone.now()
-        }
-    )
+                # ✅ Check correctness — +10 for each correct test case
+                if not error and output == tc.expected_output.strip():
+                    passed_cases += 1
+                    score += 10
+                else:
+                    continue
 
-    summary = f"{passed}/{total} test cases passed.\nScore: {final_score}/{total_score}"
-    return JsonResponse({
-        "result_summary": "\n".join(results) + "\n\n" + summary,
-        "score": final_score,
-        "passed": passed,
-        "total": total
-    })
+            except subprocess.TimeoutExpired:
+                continue
+
+        # ✅ Remove temporary file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+        # ✅ Optional: Cap score at 100
+        score = min(score, 100)
+
+        # ✅ Always save submission even if score = 0
+        Submission.objects.create(
+            problem_id=problem,
+            student_id=student,
+            code=code,
+            score=score,
+            submitted_at=timezone.now()
+        )
+
+        # ✅ Prepare response details
+        message = f"{passed_cases}/{total_cases} test cases passed. Score: {score}"
+        success = passed_cases == total_cases
+
+        # ✅ Redirect URL
+        redirect_url = reverse("student_class_details", args=[problem.class_id.class_id])
+
+        return JsonResponse({
+            "success": True,  # Always true to allow submission
+            "message": message,
+            "score": score,
+            "passed_cases": passed_cases,
+            "total_cases": total_cases,
+            "redirect_url": redirect_url
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON received."}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": f"Server error: {str(e)}"}, status=500)
+

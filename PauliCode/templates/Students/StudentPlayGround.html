@@ -2,29 +2,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Playground - {{ problem.problem_title }}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-  <!-- CodeMirror 6 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@0.19.5/dist/index.min.css">
-
-  <style>
-    body { background-color: #1E2835; color: #e0e0e0; }
-    .card { background-color: #212529; color: #e0e0e0; border-radius: 8px; border: 1px solid #2b3a55; margin-bottom: 15px; }
-    .card-header { background-color: #1E2835; color: #00cc66; font-weight: bold; }
-    .editor-container { height: 500px; position: relative; }
-    .language-select { position: absolute; top: 10px; right: 10px; width: 120px; font-size: 0.85rem; z-index: 10; }
-    .test-case-box { background: #12181f; color: #00ff99; padding: 10px; border-radius: 6px; font-family: monospace; margin-bottom: 10px; border: 1px solid #2b3a55; }
-    .btn-success { background-color: #28a745; border-color: #28a745; }
-    .btn-success:hover { background-color: #1e7e34; border-color: #1c7430; }
-    .btn-primary { background-color: #0d6efd; border-color: #0d6efd; }
-    .btn-primary:hover { background-color: #0b5ed7; border-color: #0a58ca; }
-  </style>
+<meta charset="UTF-8">
+<title>Playground - {{ problem.problem_title }}</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<style>
+body { background-color: #1E2835; color: #e0e0e0; }
+.card { background-color: #212529; color: #e0e0e0; border-radius: 8px; border: 1px solid #2b3a55; margin-bottom: 15px; }
+.card-header { background-color: #1E2835; color: #00cc66; font-weight: bold; }
+.editor-container { height: 500px; position: relative; }
+.language-select { position: absolute; top: 10px; right: 10px; width: 120px; font-size: 0.85rem; z-index: 10; }
+.test-case-box { background: #12181f; color: #00ff99; padding: 10px; border-radius: 6px; font-family: monospace; margin-bottom: 10px; border: 1px solid #2b3a55; }
+#codeEditor { height: 100%; width: 100%; font-size: 14px; }
+textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1px solid #2b3a55; border-radius: 6px; font-family: monospace; padding: 8px; margin-bottom: 10px; }
+</style>
 </head>
 <body>
-
 <div class="container-fluid mt-4">
   <div class="row">
     <!-- Problem Details -->
@@ -36,7 +29,6 @@
           <p class="card-text">{{ problem.problem_description }}</p>
         </div>
       </div>
-
       <div class="card">
         <div class="card-header">Test Cases (Input)</div>
         <div class="card-body">
@@ -58,8 +50,9 @@
           <option value="cpp">C++</option>
           <option value="java">Java</option>
         </select>
-        <div id="codeEditor" style="height: 100%; width: 100%;" tabindex="0"></div>
+        <div id="codeEditor"># Write your code here</div>
       </div>
+      <textarea id="userInput" placeholder="Enter input for input() calls here..."></textarea>
       <div class="d-flex justify-content-between mt-2">
         <button class="btn btn-success" onclick="runCode(false)" data-bs-toggle="modal" data-bs-target="#terminalModal">▶ Run Code</button>
         <button class="btn btn-primary" onclick="runCode(true)" data-bs-toggle="modal" data-bs-target="#checkModal">🧩 Check Code</button>
@@ -109,62 +102,50 @@
         <div id="checkResult" style="white-space: pre-wrap; font-family: monospace;"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-success" data-bs-dismiss="modal">Enhance</button>
-        <button type="button" class="btn btn-primary" id="submitScore">Submit</button>
+        <!-- ✅ Always visible after checking -->
+        <button type="button" class="btn btn-success" id="submitBtn" onclick="submitCode()" style="display:none;">
+          ✅ Submit Code & Score
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- CodeMirror 6 JS -->
-<script type="module">
-import {EditorState} from "https://cdn.jsdelivr.net/npm/@codemirror/state@0.19.1/dist/index.min.js";
-import {EditorView, keymap, highlightActiveLine} from "https://cdn.jsdelivr.net/npm/@codemirror/view@0.19.45/dist/index.min.js";
-import {defaultKeymap, history, historyKeymap} from "https://cdn.jsdelivr.net/npm/@codemirror/commands@0.19.9/dist/index.min.js";
-import {closeBrackets, closeBracketsKeymap} from "https://cdn.jsdelivr.net/npm/@codemirror/autocomplete@0.19.12/dist/index.min.js";
-import {oneDark} from "https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@0.19.5/dist/index.min.js";
-import {python} from "https://cdn.jsdelivr.net/npm/@codemirror/lang-python@0.19.4/dist/index.min.js";
-import {java} from "https://cdn.jsdelivr.net/npm/@codemirror/lang-java@0.19.4/dist/index.min.js";
-import {cpp} from "https://cdn.jsdelivr.net/npm/@codemirror/lang-cpp@0.19.2/dist/index.min.js";
-import {indentUnit} from "https://cdn.jsdelivr.net/npm/@codemirror/language@0.19.7/dist/index.min.js";
-
-const languageModes = { python, c: cpp, cpp, java };
-
-function createEditor(lang = "python", content = "") {
-  const parent = document.getElementById("codeEditor");
-  parent.innerHTML = "";
-  return new EditorView({
-    state: EditorState.create({
-      doc: content,
-      extensions: [
-        keymap.of([...defaultKeymap, ...closeBracketsKeymap, ...historyKeymap]),
-        closeBrackets(),
-        highlightActiveLine(),
-        history(),
-        oneDark,
-        indentUnit.of("    "),
-        languageModes[lang]()
-      ]
-    }),
-    parent: parent
-  });
-}
-
-let editor = createEditor();
-
-document.getElementById("language").addEventListener("change", e => {
-  const lang = e.target.value;
-  const content = editor.state.doc.toString();
-  editor.destroy();
-  editor = createEditor(lang, content);
+<!-- Ace Editor -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-language_tools.js"></script>
+<script>
+let editor = ace.edit("codeEditor");
+editor.setTheme("ace/theme/dracula");
+editor.session.setMode("ace/mode/python");
+editor.setOptions({
+  enableBasicAutocompletion: true,
+  enableLiveAutocompletion: true,
+  fontSize: "14px",
+  showPrintMargin: false,
+  highlightActiveLine: true,
+  tabSize: 4,
+  useSoftTabs: true
 });
 
-function getCode() { return editor.state.doc.toString(); }
+const languageModes = {
+  python: "ace/mode/python",
+  c: "ace/mode/c_cpp",
+  cpp: "ace/mode/c_cpp",
+  java: "ace/mode/java"
+};
+document.getElementById("language").addEventListener("change", e => {
+  editor.session.setMode(languageModes[e.target.value]);
+});
 
-async function runCode(checkMode=false){
+function getCode() { return editor.getValue(); }
+
+async function runCode(checkMode=false) {
   const code = getCode();
   const lang = document.getElementById('language').value;
   const problemId = "{{ problem.problem_id }}";
+  const stdinData = document.getElementById('userInput').value;
   const url = "{% url 'run_playground_code' %}";
   const modalOutput = checkMode ? document.getElementById('checkResult') : document.getElementById('terminalOutput');
   modalOutput.textContent = "Running...";
@@ -176,35 +157,81 @@ async function runCode(checkMode=false){
         "Content-Type": "application/json",
         "X-CSRFToken": "{{ csrf_token }}"
       },
-      body: JSON.stringify({ code, language: lang, check_mode: checkMode, problem_id: problemId })
+      body: JSON.stringify({ 
+        code, language: lang, check_mode: checkMode, problem_id: problemId, stdin: stdinData
+      })
     });
 
     const data = await response.json();
+    if (data.error) { modalOutput.textContent = "⚠️ " + data.error; return; }
 
-    if(data.error){
-      modalOutput.textContent = "⚠️ " + data.error;
-      return;
-    }
-
-    if(checkMode){
-      const totalScore = Number("{{ problem.total_score }}");
-      const passedAll = data.score === totalScore;
-      const color = passedAll ? "#28a745" : "#dc3545";
-      modalOutput.innerHTML = `<span style="color:${color}">${data.result_summary.replace(/\n/g,"<br>")}</span>`;
-
-      document.getElementById("submitScore").onclick = async () => {
-        alert("Score submitted: " + data.score);
-        location.reload();
-      };
+    if (checkMode) {
+      modalOutput.innerHTML = `<pre style="color:#28a745;">${data.result_summary}</pre>`;
+      // ✅ Always show submit button after checking
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.style.display = 'inline-block';
     } else {
       modalOutput.textContent = data.output || "No output.";
     }
 
-  } catch(err){
-    modalOutput.textContent = "⚠️ Failed to connect to server.";
+  } catch (err) {
+    modalOutput.textContent = "⚠️ Failed to connect to server: " + err.message;
+    console.error(err);
   }
 }
-</script>
 
+async function submitCode() {
+  const code = getCode();
+  const problemId = "{{ problem.problem_id }}";
+  const lang = document.getElementById('language').value;
+
+  try {
+    const response = await fetch("{% url 'submit_problem' %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": "{{ csrf_token }}"
+      },
+      body: JSON.stringify({
+        problem_id: problemId,
+        code: code,
+        language: lang
+      })
+    });
+
+    // ✅ Clone the response so we can safely read it as text if JSON parsing fails
+    const resClone = response.clone();
+
+    let data;
+    try {
+      data = await response.json();
+    } catch (err) {
+      const text = await resClone.text();
+      console.error("Server returned non-JSON response:", text);
+      alert("⚠️ Server error (non-JSON). Check console for details.");
+      return;
+    }
+
+    if (data.success) {
+  alert("✅ " + data.message);
+  const redirect = data.redirect_url || "{% url 'StudentClass' %}";
+    // wait a bit before redirect to let user see the alert
+    setTimeout(() => {
+      window.location.href = redirect;
+    }, 500);
+  } else {
+    alert("⚠️ " + (data.message || "Submission failed."));
+  }
+
+
+  } catch (error) {
+    alert("⚠️ Submission failed: " + error.message);
+    console.error(error);
+  }
+}
+
+
+
+</script>
 </body>
 </html>
