@@ -61,17 +61,21 @@ textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1
 
     <!-- Expected Output -->
     <div class="col-md-3">
-      <div class="card">
-        <div class="card-header">Expected Output</div>
-        <div class="card-body">
-          {% for tc in problem.problemtestcase_set.all %}
-          <div class="test-case-box">Output {{ forloop.counter }}: {{ tc.expected_output }}</div>
-          {% empty %}
-          <div>No expected outputs available.</div>
-          {% endfor %}
+  <div class="card">
+    <div class="card-header">Expected Output</div>
+    <div class="card-body">
+      {% for tc in problem.problemtestcase_set.all %}
+        <div class="test-case-box">
+          {{ tc.expected_output|linebreaksbr }}
+          <br>
         </div>
-      </div>
+      {% empty %}
+        <div>No expected outputs available.</div>
+      {% endfor %}
     </div>
+  </div>
+</div>
+
   </div>
 </div>
 

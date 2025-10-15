@@ -109,14 +109,54 @@
       <!-- RIGHT COLUMN (Students Section) -->
       <div class="col-lg-4">
         <div class="card bg-dark border-0 shadow-sm text-white rounded-4 p-3">
-          <h5 class="fw-bold mb-3">Students</h5>
-          <input type="text" class="form-control form-control-sm text-white border-0 shadow-sm mb-3"
-                 placeholder="Search students..."
-                 style="background-color: rgb(37,36,36);">
-          <div class="p-3 rounded-3 text-center text-muted"
-               style="min-height: 300px;background-color: rgb(37,36,36);">
-            <p>No students enrolled yet.</p>
+          <h5 class="fw-bold text-white" style = "margin-bottom: -5px;">Students</h5>
+
+<!-- Student Search Form -->
+
+<form method="GET" class="">
+  <div class="d-flex align-items-center gap-2" style="width: 100%;">
+    <input type="text" name="student_search" value="{{ student_query }}"
+           class="form-control form-control-sm text-white border-0 shadow-sm flex-grow-1"
+           placeholder="Search students..."
+           style="background-color: rgb(37,36,36); height: 36px; font-size: 14px; min-width: 200px; max-width: 400px;">
+    <button class="btn btn-success fw-bold btn-sm"
+            type="submit"
+            style="height: 36px; padding: 16 px 16px; font-size: 13px; border-radius: 6px; margin-top: 13px;">
+      Search
+    </button>
+  </div>
+</form>
+
+
+
+<!-- Student List -->
+<div class="p-3 rounded-3 text-start text-white"
+     style="min-height: 300px; background-color: rgb(37,36,36); overflow-y: auto; max-height: 350px;">
+  {% if students %}
+    <ul class="list-group list-group-flush">
+      {% for enrollment in students %}
+        <li class="list-group-item bg-transparent text-white d-flex align-items-center justify-content-between border-0 py-2">
+          <div class="d-flex align-items-center">
+            {% if enrollment.student_id.user_image %}
+              <img src="{{ enrollment.student_id.user_image.url }}" alt="student" 
+                   class="rounded-circle me-2" width="35" height="35">
+            {% else %}
+              <img src="{% static 'img/default_user.png' %}" alt="student" 
+                   class="rounded-circle me-2" width="35" height="35">
+            {% endif %}
+            <span>{{ enrollment.student_id.first_name }} {{ enrollment.student_id.last_name }}</span>
           </div>
+          <span class="badge bg-secondary small">{{ enrollment.student_id.school_id }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="text-center text-muted py-4">
+      <p>No students enrolled yet.</p>
+    </div>
+  {% endif %}
+</div>
+
         </div>
       </div>
     </div>

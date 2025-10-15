@@ -206,42 +206,47 @@ def classDetails(request, class_id):
     # Get the class object
     class_obj = get_object_or_404(Class, class_id=class_id, teacher=teacher)
 
-    # Base query
+    # Base query for problems
     problems = Problem.objects.filter(class_id=class_obj).order_by('-problem_id')
 
-    # Get students enrolled
-    students = (
-        Enrollment.objects.filter(class_id=class_obj)
-        .select_related('student_id')
-        .order_by('student_id__first_name')
-    )
-
-    # ---- SEARCH AND FILTER ----
+    # ---- SEARCH AND FILTER FOR PROBLEMS ----
     query = request.GET.get('q', '').strip()
     filter_type = request.GET.get('filter', '').strip()
 
-    # If the filter button is clicked again (same filter), reset it
+    # Toggle filter (Assignment / Quiz)
     last_filter = request.session.get('last_filter', '')
-
     if filter_type == last_filter:
-        # Clicking the same filter twice removes it
         filter_type = ''
         request.session['last_filter'] = ''
     else:
-        # Otherwise, remember the current filter
         request.session['last_filter'] = filter_type
 
-    # Apply search and filter logic
+    # Apply search/filter for problems
     if query:
         problems = problems.filter(problem_title__icontains=query)
     if filter_type == 'Assignment':
         problems = problems.filter(problem_type='Assignment')
     elif filter_type == 'Quiz':
         problems = problems.filter(problem_type='Quiz')
-
-    # If search bar is empty and submitted, refresh (no filter)
     if not query and not filter_type:
         problems = Problem.objects.filter(class_id=class_obj).order_by('-problem_id')
+
+    # ---- STUDENT SEARCH ----
+    student_query = request.GET.get('student_search', '').strip()
+
+    students = (
+        Enrollment.objects.filter(class_id=class_obj)
+        .select_related('student_id')
+        .order_by('student_id__first_name')
+    )
+
+    # Filter students if search term entered
+    if student_query:
+        students = students.filter(
+            student_id__first_name__icontains=student_query
+        ) | students.filter(
+            student_id__last_name__icontains=student_query
+        )
 
     return render(request, 'User/classDetails.html', {
         'currentpage': 'MyClasses',
@@ -251,7 +256,9 @@ def classDetails(request, class_id):
         'students': students,
         'query': query,
         'filter_type': filter_type,
+        'student_query': student_query,
     })
+
 
 
 
@@ -586,94 +593,123 @@ def run_playground_code(request):
 
     try:
         data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON."}, status=400)
+        code = data.get("code", "")
+        language = data.get("language", "python")
+        check_mode = data.get("check_mode", False)
+        problem_id = data.get("problem_id")
+        stdin_data = data.get("stdin", "")
 
-    code = data.get("code", "")
-    language = data.get("language", "python")
-    check_mode = data.get("check_mode", False)
-    problem_id = data.get("problem_id")
-    stdin = data.get("stdin", "")
-    student_id = request.session.get("school_id")
-
-    if not student_id:
-        return JsonResponse({"error": "You must be logged in."}, status=403)
-
-    student = get_object_or_404(User, school_id=student_id)
-
-    # ---------- RUN CODE ----------
-    try:
-        response = requests.post(
-            PISTON_URL,
-            json={
-                "language": language,
-                "version": "*",
-                "files": [{"content": code}],
-                "stdin": stdin
-            },
-            timeout=10
-        )
-        response.raise_for_status()
-        result = response.json()
-        output = result.get("run", {}).get("output", "").strip()
-    except Exception as e:
-        return JsonResponse({"error": f"Execution error: {e}"}, status=500)
-
-    # ---------- CHECK CODE ----------
-    if check_mode:
-        if not problem_id:
-            return JsonResponse({"error": "Problem ID required for check mode."}, status=400)
+        if not code.strip():
+            return JsonResponse({"error": "Code cannot be empty."}, status=400)
 
         problem = get_object_or_404(Problem, pk=problem_id)
-        test_cases = ProblemTestCase.objects.filter(problem_id=problem)
 
-        if not test_cases.exists():
-            return JsonResponse({"error": "No test cases found."}, status=404)
+        # Save code temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp_file:
+            tmp_file.write(code.encode("utf-8"))
+            tmp_path = tmp_file.name
 
-        passed = 0
-        total = test_cases.count()
-        results = []
+        if check_mode:
+            testcases = ProblemTestCase.objects.filter(problem_id=problem)
+            results = []
+            passed_count = 0
 
-        for idx, tc in enumerate(test_cases, start=1):
+            for idx, tc in enumerate(testcases, start=1):
+                # ✅ Clean stdin and add safe dummy fallback values
+                stdin_data = (tc.input_data or "").strip()
+                stdin_lines = [line.strip() for line in stdin_data.splitlines() if line.strip() != ""]
+
+                # Add at least 10 dummy numeric lines to prevent EOF/ValueError
+                while len(stdin_lines) < 10:
+                    stdin_lines.append("0")
+
+                safe_stdin = "\n".join(stdin_lines) + "\n"
+
+                try:
+                    process = subprocess.Popen(
+                        ["python", tmp_path],
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+
+                    out, err = process.communicate(safe_stdin, timeout=5)
+                    out = out.strip()
+                    expected = (tc.expected_output or "").strip()
+
+                    # ✅ Normalize whitespace and case for fair comparison
+                    def normalize_output(text):
+                        return " ".join(text.strip().split()).lower()
+
+                    norm_out = normalize_output(out)
+                    norm_expected = normalize_output(expected)
+
+                    if err:
+                        results.append(f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {err}")
+                    elif norm_out == norm_expected:
+                        results.append(f"✅ Test {idx}: Passed")
+                        passed_count += 1
+                    else:
+                        results.append(f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {out}")
+
+
+                except subprocess.TimeoutExpired:
+                    results.append(f"⚠️ Test {idx}: Timeout (5s limit)")
+                except Exception as e:
+                    results.append(f"⚠️ Test {idx}: Error - {str(e)}")
+
+            total_score = passed_count * 10
+            result_summary = (
+                "\n".join(results)
+                + f"\n\n{passed_count}/{len(testcases)} test cases passed."
+            )
+
+            return JsonResponse({
+                "result_summary": result_summary,
+                "total_score": total_score,
+            })
+
+        else:
+            # Normal run mode
+            stdin_cleaned = (stdin_data or "").strip()
+            stdin_lines = [line.strip() for line in stdin_cleaned.splitlines() if line.strip() != ""]
+
+            # Add fallback dummy input
+            while len(stdin_lines) < 10:
+                stdin_lines.append("0")
+
+            safe_stdin = "\n".join(stdin_lines) + "\n"
+
             try:
-                resp = requests.post(PISTON_URL, json={
-                    "language": language,
-                    "version": "*",
-                    "files": [{"content": code}],
-                    "stdin": tc.input_data
-                }, timeout=10)
-                resp.raise_for_status()
-                r = resp.json()
-                output_tc = r.get("run", {}).get("output", "").strip()
+                result = subprocess.run(
+                    ["python", tmp_path],
+                    input=safe_stdin,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                output = result.stdout.strip()
+                error = result.stderr.strip()
+
+                return JsonResponse({
+                    "output": output if output else error or "No output."
+                })
+
+            except subprocess.TimeoutExpired:
+                return JsonResponse({"error": "Execution timed out (5 seconds)."})
             except Exception as e:
-                output_tc = f"Error: {e}"
+                return JsonResponse({"error": str(e)})
 
-            expected = tc.expected_output.strip()
-            if output_tc == expected:
-                passed += 1
-                results.append(f"✅ Test {idx}: Passed")
-            else:
-                results.append(f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {output_tc}")
-
-        summary = f"{passed}/{total} test cases passed."
-        return JsonResponse({
-            "result_summary": "\n".join(results) + "\n" + summary,
-            "passed": passed,
-            "total": total
-        })
-
-    return JsonResponse({"output": output})
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON."}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": f"Server error: {str(e)}"}, status=500)
+    finally:
+        if "tmp_path" in locals() and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
-
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from django.urls import reverse
-from django.utils import timezone
-import tempfile, subprocess, os, json
-
-from .models import Problem, ProblemTestCase, Submission, User
 
 
 @csrf_exempt
