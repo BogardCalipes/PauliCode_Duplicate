@@ -3,11 +3,12 @@ from .models import User, Class, Problem, Enrollment, ProblemTestCase, Submissio
 from django.contrib import messages
 from datetime import datetime
 from django.http import JsonResponse 
-import json, requests, subprocess, tempfile, os   
+import json, requests, subprocess, tempfile, os, shutil
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.urls import reverse
 from django.core.serializers.json import DjangoJSONEncoder
+
 
 # ---------------- LOGIN & DASHBOARD ---------------- #
 
@@ -588,13 +589,20 @@ def playground(request, problem_id):
 # ---------------- RUN & CHECK CODE ---------------- #
 @csrf_exempt
 def run_playground_code(request):
+    """Handles manual code execution and test case checking via Piston API."""
     if request.method != "POST":
         return JsonResponse({"error": "Invalid request method."}, status=400)
 
+    tmp_dir = None
     try:
-        data = json.loads(request.body)
+        # Safely parse JSON input
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+
         code = data.get("code", "")
-        language = data.get("language", "python")
+        language = (data.get("language", "python") or "python").lower()
         check_mode = data.get("check_mode", False)
         problem_id = data.get("problem_id")
         stdin_data = data.get("stdin", "")
@@ -604,184 +612,124 @@ def run_playground_code(request):
 
         problem = get_object_or_404(Problem, pk=problem_id)
 
-        # Save code temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp_file:
-            tmp_file.write(code.encode("utf-8"))
-            tmp_path = tmp_file.name
+        tmp_dir = tempfile.mkdtemp(prefix="code_run_")
 
+        # Determine file name for each language
+        extensions = {"python": "main.py", "c": "main.c", "cpp": "main.cpp", "java": "Main.java"}
+        source_name = extensions.get(language, "main.py")
+        source_path = os.path.join(tmp_dir, source_name)
+        with open(source_path, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        # If test case mode
         if check_mode:
             testcases = ProblemTestCase.objects.filter(problem_id=problem)
-            results = []
-            passed_count = 0
+            if not testcases.exists():
+                return JsonResponse({"error": "No test cases found."}, status=404)
 
-            for idx, tc in enumerate(testcases, start=1):
-                # ✅ Clean stdin and add safe dummy fallback values
-                stdin_data = (tc.input_data or "").strip()
-                stdin_lines = [line.strip() for line in stdin_data.splitlines() if line.strip() != ""]
+            results, passed_count = [], 0
+            for i, tc in enumerate(testcases, start=1):
+                expected = (tc.expected_output or "").strip()
+                raw_input = (tc.input_data or "").strip()
 
-                # Add at least 10 dummy numeric lines to prevent EOF/ValueError
-                while len(stdin_lines) < 10:
-                    stdin_lines.append("0")
+                exec_res = execute_source(language, source_path, stdin_data=raw_input + "\n")
 
-                safe_stdin = "\n".join(stdin_lines) + "\n"
+                # Handle errors cleanly
+                if exec_res.get("error"):
+                    results.append(f"❌ Test {i}: {exec_res['error']}")
+                    continue
 
-                try:
-                    process = subprocess.Popen(
-                        ["python", tmp_path],
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True
-                    )
-
-                    out, err = process.communicate(safe_stdin, timeout=5)
-                    out = out.strip()
-                    expected = (tc.expected_output or "").strip()
-
-                    # ✅ Normalize whitespace and case for fair comparison
-                    def normalize_output(text):
-                        return " ".join(text.strip().split()).lower()
-
-                    norm_out = normalize_output(out)
-                    norm_expected = normalize_output(expected)
-
-                    if err:
-                        results.append(f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {err}")
-                    elif norm_out == norm_expected:
-                        results.append(f"✅ Test {idx}: Passed")
-                        passed_count += 1
-                    else:
-                        results.append(f"❌ Test {idx}: Failed\nExpected: {expected}\nGot: {out}")
-
-
-                except subprocess.TimeoutExpired:
-                    results.append(f"⚠️ Test {idx}: Timeout (5s limit)")
-                except Exception as e:
-                    results.append(f"⚠️ Test {idx}: Error - {str(e)}")
-
-            total_score = passed_count * 10
-            result_summary = (
-                "\n".join(results)
-                + f"\n\n{passed_count}/{len(testcases)} test cases passed."
-            )
+                output = (exec_res.get("stdout") or "").strip()
+                if output == expected:
+                    results.append(f"✅ Test {i}: Passed")
+                    passed_count += 1
+                else:
+                    results.append(f"❌ Test {i}: Failed\nInput: {raw_input}\nExpected: {expected}\nGot: {output}")
 
             return JsonResponse({
-                "result_summary": result_summary,
-                "total_score": total_score,
+                "result_summary": "\n".join(results),
+                "total_score": passed_count * 10,
             })
 
+        # Manual run mode
+        exec_res = execute_source(language, source_path, stdin_data=stdin_data + "\n")
+        if exec_res.get("error"):
+            return JsonResponse({
+                "output": exec_res.get("stdout", ""),
+                "stderr": exec_res.get("stderr", ""),
+                "compile_error": exec_res.get("compile_error", ""),
+                "error": exec_res["error"]
+            })
         else:
-            # Normal run mode
-            stdin_cleaned = (stdin_data or "").strip()
-            stdin_lines = [line.strip() for line in stdin_cleaned.splitlines() if line.strip() != ""]
+            return JsonResponse({
+        "output": exec_res.get("stdout", "No output."),
+        "stderr": exec_res.get("stderr", ""),
+        "compile_error": exec_res.get("compile_error", ""),
+        "error": ""
+    })
 
-            # Add fallback dummy input
-            while len(stdin_lines) < 10:
-                stdin_lines.append("0")
 
-            safe_stdin = "\n".join(stdin_lines) + "\n"
-
-            try:
-                result = subprocess.run(
-                    ["python", tmp_path],
-                    input=safe_stdin,
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
-                output = result.stdout.strip()
-                error = result.stderr.strip()
-
-                return JsonResponse({
-                    "output": output if output else error or "No output."
-                })
-
-            except subprocess.TimeoutExpired:
-                return JsonResponse({"error": "Execution timed out (5 seconds)."})
-            except Exception as e:
-                return JsonResponse({"error": str(e)})
-
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON."}, status=400)
     except Exception as e:
         return JsonResponse({"error": f"Server error: {str(e)}"}, status=500)
+
     finally:
-        if "tmp_path" in locals() and os.path.exists(tmp_path):
-            os.remove(tmp_path)
-
-
+        if tmp_dir and os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @csrf_exempt
-def submit_problem(request):
-    if request.method != "POST":
-        return JsonResponse({"success": False, "message": "Invalid request method."}, status=400)
+def submit_problem(request, problem_id):
+    """
+    Handles code submission from students.
+    Runs test cases, gives score, and returns JSON response for modal display.
+    """
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            code = data.get("code", "")
+            language = data.get("language", "python")
+        except Exception:
+            return JsonResponse({"success": False, "message": "Invalid JSON received."}, status=400)
 
-    try:
-        data = json.loads(request.body)
-        code = data.get("code", "")
-        problem_id = data.get("problem_id")
-        language = data.get("language", "python")
-
-        if not code.strip():
-            return JsonResponse({"success": False, "message": "Code cannot be empty."}, status=400)
-
-        # ✅ Validate problem
         problem = get_object_or_404(Problem, pk=problem_id)
+        student = get_object_or_404(User, pk=request.session["school_id"])
 
-        # ✅ Get logged-in student
-        student_id = request.session.get('school_id')
-        if not student_id:
-            return JsonResponse({"success": False, "message": "User not logged in."}, status=403)
-        student = get_object_or_404(User, school_id=student_id)
-
-        # ✅ Retrieve test cases for the problem
         test_cases = ProblemTestCase.objects.filter(problem_id=problem)
-        if not test_cases.exists():
-            return JsonResponse({"success": False, "message": "No test cases found for this problem."}, status=404)
-
-        # ✅ Save student code temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as temp_file:
-            temp_file.write(code.encode('utf-8'))
-            temp_path = temp_file.name
-
-        # ✅ Initialize counters
-        score = 0
-        passed_cases = 0
         total_cases = test_cases.count()
+        passed_cases = 0
+        score = 0
+        results = []
 
-        # ✅ Loop through each test case
-        for tc in test_cases:
-            try:
-                result = subprocess.run(
-                    ["python", temp_path],
-                    input=tc.input_data,
-                    capture_output=True,
-                    text=True,
-                    timeout=5
-                )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            ext_map = {"python": ".py", "c": ".c", "cpp": ".cpp", "java": ".java"}
+            ext = ext_map.get(language)
+            if not ext:
+                return JsonResponse({"success": False, "message": "Unsupported language selected."}, status=400)
 
-                output = result.stdout.strip()
-                error = result.stderr.strip()
+            source_path = os.path.join(tmp_dir, f"Main{ext}")
+            with open(source_path, "w") as src:
+                src.write(code)
 
-                # ✅ Check correctness — +10 for each correct test case
-                if not error and output == tc.expected_output.strip():
-                    passed_cases += 1
-                    score += 10
-                else:
+            for i, tc in enumerate(test_cases, start=1):
+                raw_input = (tc.input_data or "").strip()
+                try:
+                    exec_res = execute_source(language, source_path, stdin_data=raw_input + ("\n" if raw_input else "\n"))
+                    if exec_res.get("compile_error") or exec_res.get("timeout") or exec_res.get("stderr"):
+                        results.append(f"❌ Test {i}: Error\n{exec_res.get('compile_error') or exec_res.get('stderr') or exec_res.get('timeout')}")
+                        continue
+
+                    out = (exec_res.get("stdout") or "").strip()
+                    expected = (tc.expected_output or "").strip()
+                    if out == expected:
+                        passed_cases += 1
+                        score += 10
+                        results.append(f"✅ Test {i}: Passed")
+                    else:
+                        results.append(f"❌ Test {i}: Failed\nInput: {raw_input}\nExpected: {expected}\nGot: {out}")
+                except Exception as e:
+                    results.append(f"❌ Test {i}: Exception\n{str(e)}")
                     continue
 
-            except subprocess.TimeoutExpired:
-                continue
-
-        # ✅ Remove temporary file
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
-        # ✅ Optional: Cap score at 100
-        score = min(score, 100)
-
-        # ✅ Always save submission even if score = 0
         Submission.objects.create(
             problem_id=problem,
             student_id=student,
@@ -790,24 +738,100 @@ def submit_problem(request):
             submitted_at=timezone.now()
         )
 
-        # ✅ Prepare response details
-        message = f"{passed_cases}/{total_cases} test cases passed. Score: {score}"
-        success = passed_cases == total_cases
-
-        # ✅ Redirect URL
+        result_summary = "\n".join(results) + f"\n\n{passed_cases}/{total_cases} test cases passed. Score: {score}"
         redirect_url = reverse("student_class_details", args=[problem.class_id.class_id])
 
         return JsonResponse({
-            "success": True,  # Always true to allow submission
-            "message": message,
+            "success": True,
+            "result_summary": result_summary,
             "score": score,
             "passed_cases": passed_cases,
             "total_cases": total_cases,
             "redirect_url": redirect_url
         })
 
-    except json.JSONDecodeError:
-        return JsonResponse({"success": False, "message": "Invalid JSON received."}, status=400)
+    return JsonResponse({"success": False, "message": "Invalid request method."}, status=400)
+
+def count_expected_inputs(test_output):
+    """
+    Estimate number of inputs based on output prompts.
+    """
+    if not test_output:
+        return 0
+    num_prompts = test_output.count("Enter num")
+    if num_prompts == 0:
+        num_prompts = test_output.count("\n") + 1
+    return num_prompts
+
+# Helper to find executable (cross-platform)
+def find_executable(names):
+    for n in names:
+        path = shutil.which(n)
+        if path:
+            return path
+    return None
+
+def execute_source(language, source_path, stdin_data="", timeout_sec=5):
+    """Executes code safely via Piston API and always returns JSON-safe output."""
+    PISTON_URL = "https://emkc.org/api/v2/piston/execute"
+
+    with open(source_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    # Correct language mapping for Piston
+    lang_map = {
+        "python": "python3",
+        "python3": "python3",
+        "c": "c",
+        "cpp": "cpp",
+        "java": "java",
+    }
+    lang = lang_map.get(language.lower(), "python3")
+
+    payload = {
+        "language": lang,
+        "version": "*",
+        "files": [{"name": "main", "content": code}],
+        "stdin": stdin_data or "",
+    }
+
+    try:
+        res = requests.post(PISTON_URL, json=payload, timeout=timeout_sec + 2)
+
+        # Ensure JSON response
+        if "application/json" not in res.headers.get("Content-Type", ""):
+            return {
+                "stdout": "",
+                "stderr": "",
+                "compile_error": "",
+                "error": f"⚠️ Non-JSON from Piston ({res.status_code}): {res.text[:200]}"
+            }
+
+        data = res.json()
+
+        if res.status_code != 200:
+            return {
+                "stdout": "",
+                "stderr": "",
+                "compile_error": "",
+                "error": f"⚠️ Piston API error {res.status_code}: {data}"
+            }
+
+        # Defensive key access
+        run_data = data.get("run", {})
+        compile_data = data.get("compile", {})
+
+        return {
+            "stdout": run_data.get("stdout", ""),
+            "stderr": run_data.get("stderr", ""),
+            "compile_error": compile_data.get("stderr", ""),
+            "error": "",
+        }
+
+    except requests.Timeout:
+        return {"stdout": "", "stderr": "", "compile_error": "", "error": "⏱️ Timed out."}
+    except requests.RequestException as e:
+        return {"stdout": "", "stderr": "", "compile_error": "", "error": f"🌐 Request error: {e}"}
     except Exception as e:
-        return JsonResponse({"success": False, "message": f"Server error: {str(e)}"}, status=500)
+        return {"stdout": "", "stderr": "", "compile_error": "", "error": f"⚠️ Unexpected: {e}"}
 

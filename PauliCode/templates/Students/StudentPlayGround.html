@@ -108,7 +108,7 @@ textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1
       <div class="modal-footer">
         <!-- ✅ Always visible after checking -->
         <button type="button" class="btn btn-success" id="submitBtn" onclick="submitCode()" style="display:none;">
-          ✅ Submit Code & Score
+          ✅ Submit
         </button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
@@ -188,9 +188,10 @@ async function submitCode() {
   const code = getCode();
   const problemId = "{{ problem.problem_id }}";
   const lang = document.getElementById('language').value;
+  const checkResultDiv = document.getElementById('checkResult');
 
   try {
-    const response = await fetch("{% url 'submit_problem' %}", {
+    const response = await fetch(`/submit_problem/${problemId}/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -203,39 +204,32 @@ async function submitCode() {
       })
     });
 
-    // ✅ Clone the response so we can safely read it as text if JSON parsing fails
     const resClone = response.clone();
-
     let data;
     try {
       data = await response.json();
     } catch (err) {
       const text = await resClone.text();
+      checkResultDiv.textContent = "⚠️ Server error (non-JSON). Check console for details.";
       console.error("Server returned non-JSON response:", text);
-      alert("⚠️ Server error (non-JSON). Check console for details.");
       return;
     }
 
     if (data.success) {
-  alert("✅ " + data.message);
-  const redirect = data.redirect_url || "{% url 'StudentClass' %}";
-    // wait a bit before redirect to let user see the alert
-    setTimeout(() => {
-      window.location.href = redirect;
-    }, 500);
-  } else {
-    alert("⚠️ " + (data.message || "Submission failed."));
-  }
-
-
+      // Show result summary in modal
+      checkResultDiv.innerHTML = `<pre style="color:#28a745;">${data.result_summary}</pre>`;
+      // Redirect after short delay
+      setTimeout(() => {
+        window.location.href = data.redirect_url || "{% url 'StudentClass' %}";
+      }, 1500);
+    } else {
+      checkResultDiv.textContent = "⚠️ " + (data.message || "Submission failed.");
+    }
   } catch (error) {
-    alert("⚠️ Submission failed: " + error.message);
+    checkResultDiv.textContent = "⚠️ Submission failed: " + error.message;
     console.error(error);
   }
 }
-
-
-
 </script>
 </body>
 </html>
