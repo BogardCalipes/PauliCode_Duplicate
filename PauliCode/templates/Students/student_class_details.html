@@ -137,56 +137,43 @@
 
  <!-- PROBLEM DETAILS MODAL -->
 <div class="modal fade" id="problemDetailsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered"> <!-- changed modal-xl -> modal-lg -->
+  <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content text-white" style="background-color: #1E2835; border-radius: 15px; max-width: 800px; margin: auto;">
-      
       <!-- Header -->
       <div class="modal-header border-0 pb-0">
-        <h4 class="fw-bold text-success">Problem Details</h4>
+        <div class="w-100">
+          <div class="d-flex flex-wrap align-items-center justify-content-between">
+            <div>
+              <h4 class="fw-bold text-success mb-1" id="problem_title"></h4>
+              <span class="badge bg-info text-dark me-2" id="problem_type"></span>
+              <span class="badge bg-warning text-dark" id="due_date"></span>
+            </div>
+          </div>
+        </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-
       <!-- Body -->
       <div class="modal-body px-4 pb-3">
         <div class="container-fluid">
-
-          <!-- TOP ROW: Title & Instruction -->
           <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="fw-semibold mb-1">Title</label>
-              <div id="problem_title" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55;"></div>
-            </div>
-            <div class="col-md-6">
-              <label class="fw-semibold mb-1">Instruction</label>
-              <div id="problem_description" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55; min-height:120px;"></div>
-            </div>
-          </div>
-
-          <!-- SECOND ROW: Score & Due Date -->
-          <div class="row g-3 mb-3">
+            <!-- Left: Score -->
             <div class="col-md-6">
               <label class="fw-semibold mb-1">Score</label>
-              <div id="total_score" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55;"></div>
+              <div id="total_score" class="p-2 rounded mb-2" style="background:#101826; border:1px solid #2b3a55;"></div>
             </div>
-            <div class="col-md-6">
-              <label class="fw-semibold mb-1">Due Date</label>
-              <div id="due_date" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55;"></div>
-            </div>
+            <!-- Right: Time Limit -->
             <div class="col-md-6">
               <label class="fw-semibold mb-1">Time Limit</label>
-              <div id="time_limit" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55;"></div>
-            </div>
-            <div class="col-md-6">
-              <label class="fw-semibold mb-1">Type</label>
-              <div id="problem_type" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55;"></div>
+              <div id="time_limit" class="p-2 rounded mb-2" style="background:#101826; border:1px solid #2b3a55;"></div>
             </div>
           </div>
-
-          <!-- THIRD ROW: Time Limit & Type -->
+          <!-- Instruction at the bottom -->
           <div class="row g-3 mb-3">
-            
+            <div class="col-12">
+              <label class="fw-semibold mb-1">Instruction</label>
+              <div id="problem_description" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55; min-height:120px; white-space:pre-line; font-size: 12px;"></div>
+            </div>
           </div>
-
           <!-- TEST CASES -->
           <div class="row g-2">
             <div class="col-12">
@@ -194,23 +181,16 @@
               <div class="row g-2" id="test_cases_container"></div>
             </div>
           </div>
-
         </div>
       </div>
-
-    
       <!-- Footer -->
-    <div class="modal-footer border-0 d-flex justify-content-between pt-0">
-  <button type="button" class="btn btn-outline-light px-4" data-bs-dismiss="modal">Cancel</button>
-  <button type="button" class="btn btn-success px-4" id="answerButton">Answer</button>
-</div>
-
-
-
+      <div class="modal-footer border-0 d-flex justify-content-between pt-0">
+        <button type="button" class="btn btn-outline-light px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success px-4" id="answerButton">Answer</button>
+      </div>
     </div>
   </div>
 </div>
-
 
 
 
@@ -274,7 +254,7 @@ document.querySelectorAll('.problem-card').forEach(card => {
         document.getElementById('problem_type').textContent = data.type;
         document.getElementById('total_score').textContent = data.score;
         document.getElementById('time_limit').textContent = data.time_limit;
-        document.getElementById('due_date').textContent = data.due_date;
+        document.getElementById('due_date').textContent = "Due: " + data.due_date;
 
         // Populate test cases
         const container = document.getElementById('test_cases_container');
