@@ -461,6 +461,40 @@ async function autoSubmitOnTimeout() {
   }
 }
 
+// =============================
+//  PREVENT BACK NAVIGATION
+// =============================
+(function preventBackNavigation() {
+  history.pushState(null, null, location.href);
+  window.onpopstate = function () {
+    history.pushState(null, null, location.href);
+    alert("🚫 You cannot go back during the problem session.");
+  };
+})();
+
+// =============================
+//  DETECT TAB SWITCH OR PAGE CLOSE
+// =============================
+let hasSubmitted = false;
+
+window.addEventListener("blur", () => {
+  if (!hasSubmitted) {
+    alert("🚫 You switched tabs! Your session will end for security.");
+    autoSubmitOnTimeout();
+    hasSubmitted = true;
+  }
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (!hasSubmitted) {
+    e.preventDefault();
+    e.returnValue = "Are you sure you want to leave? Your work will be submitted automatically.";
+    autoSubmitOnTimeout();
+    hasSubmitted = true;
+  }
+});
+
+
 
 </script>
 </body>

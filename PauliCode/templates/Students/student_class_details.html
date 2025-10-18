@@ -256,24 +256,36 @@ document.querySelectorAll('.problem-card').forEach(card => {
         document.getElementById('time_limit').textContent = data.time_limit;
         document.getElementById('due_date').textContent = "Due: " + data.due_date;
 
-        // Populate test cases
+                // Populate test cases
         const container = document.getElementById('test_cases_container');
         container.innerHTML = '';
+
         data.test_cases.forEach((tc, index) => {
           const col = document.createElement('div');
           col.className = 'col-12';
-          col.innerHTML = `
-            <div class="p-2 mb-2 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
-              <strong>Input ${index + 1}:</strong>
-              <pre style="margin:0; white-space:pre-wrap;">${tc.input}</pre>
-            </div>
-            <div class="p-2 mb-3 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
-              <strong>Output ${index + 1}:</strong>
-              <pre style="margin:0; white-space:pre-wrap;">${tc.output}</pre>
-            </div>
-          `;
+
+          if (index === 2) { // Hide Test Case 3 (0-based index)
+            col.innerHTML = `
+              <div class="p-3 mb-3 rounded text-center" style="background:#1e2b4d; border:1px dashed #3b4b6b;">
+                <span class="badge bg-secondary px-3 py-2">Test Case 3 Hidden</span>
+              </div>
+            `;
+          } else {
+            col.innerHTML = `
+              <div class="p-2 mb-2 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
+                <strong>Input ${index + 1}:</strong>
+                <pre style="margin:0; white-space:pre-wrap;">${tc.input}</pre>
+              </div>
+              <div class="p-2 mb-3 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
+                <strong>Output ${index + 1}:</strong>
+                <pre style="margin:0; white-space:pre-wrap;">${tc.output}</pre>
+              </div>
+            `;
+          }
+
           container.appendChild(col);
         });
+
 
         // Get reference to Answer button
         const answerBtn = document.getElementById('answerButton');
