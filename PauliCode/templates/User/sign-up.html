@@ -5,16 +5,17 @@
 <head>
   <meta charset="UTF-8">
   <title>Create Account | PauliCode</title>
+  <link rel="icon" type="image/png" href="{% static 'img/favicon.ico' %}">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-900 text-white font-sans flex h-screen">
+<body class="bg-gray-900 text-white font-sans flex flex-col md:flex-row min-h-screen">
 
   <!-- Left Section -->
-  <div class="w-2/5 relative flex flex-col items-center justify-center overflow-hidden">
+  <div class="md:w-2/5 w-full relative flex flex-col items-center justify-center overflow-hidden">
     <img src="{% static 'img/bgIndex.png' %}" alt="Background" class="absolute inset-0 w-full h-full object-cover">
     <div class="absolute inset-0 bg-black bg-opacity-50"></div>
 
-    <div class="relative text-center px-10 z-10">
+    <div class="relative text-center px-10 z-10 py-10 md:py-0">
       <div class="text-green-500 text-7xl font-bold mb-4">&lt;P&gt;</div>
       <h1 class="text-green-400 text-3xl font-bold mb-2">PauliCode</h1>
       <p class="text-lg font-semibold mt-4">Welcome to PauliCode!</p>
@@ -27,12 +28,13 @@
   </div>
 
   <!-- Right Section -->
-  <div class="w-3/5 flex flex-col justify-center px-28 bg-gray-900">
+  <div class="md:w-3/5 w-full flex flex-col justify-center px-10 md:px-28 py-10 bg-gray-900">
+
     <h1 class="text-4xl font-bold mb-3 text-center">CREATE ACCOUNT</h1>
     <p class="text-gray-400 mb-8 text-base text-center">Join the Community of IT Learners</p>
 
     <!-- Social Buttons -->
-    <div class="flex space-x-6 mb-8">
+    <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6 mb-8">
       <button class="flex-1 bg-gray-800 hover:bg-gray-700 py-3 rounded-lg flex items-center justify-center border border-gray-700 transition">
         <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/google.svg" alt="Google" class="w-5 h-5 mr-2">
         Google
@@ -50,34 +52,72 @@
     </div>
 
     <!-- Signup Form -->
-    <form method="POST" id="signupForm" class="space-y-6">
+    <form method="POST" id="signupForm" class="space-y-6" enctype="multipart/form-data">
       {% csrf_token %}
-      <div class="flex space-x-6">
+
+      <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6">
         <input type="text" name="first_name" placeholder="First Name"
                value="{{ first_name|default:'' }}"
-               class="input-field w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+               class="input-field w-full md:w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
         <input type="text" name="last_name" placeholder="Last Name"
                value="{{ last_name|default:'' }}"
-               class="input-field w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+               class="input-field w-full md:w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
       </div>
 
-      <div class="flex space-x-6">
+      <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6">
         <input type="text" name="school_id" placeholder="School ID (e.g. X-XXXX-XXXX)"
                value="{{ school_id|default:'' }}"
-               class="input-field w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+               class="input-field w-full md:w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
         <select name="user_type"
-                class="input-field w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-400">
+                class="input-field w-full md:w-1/2 bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-400">
           <option value="" disabled {% if not user_type %}selected{% endif %}>User Type</option>
           <option value="student" {% if user_type == 'student' %}selected{% endif %}>Student</option>
           <option value="teacher" {% if user_type == 'teacher' %}selected{% endif %}>Teacher</option>
         </select>
       </div>
 
-      <input type="password" name="password" placeholder="Password"
-             class="input-field w-full bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+      <!-- Profile Picture + Password Fields Row -->
+      <div class="flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
 
-      <input type="password" name="confirm_password" placeholder="Confirm Password"
-             class="input-field w-full bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+        <!-- Left: Password Fields -->
+       
+
+       
+        <div class="flex-1 flex flex-col space-y-4" style = "margin-top: 5vh;">
+          <input type="password" name="password" placeholder="Password"
+                 class="input-field w-full bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+
+          <input type="password" name="confirm_password" placeholder="Confirm Password"
+                 class="input-field w-full bg-gray-800 px-5 py-3 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+        </div>
+
+         <!-- Right: Profile Picture -->
+        <div class="flex-1 flex flex-col items-center">
+          <label class="block text-gray-400 font-semibold mb-2 text-center">Profile Picture</label>
+
+          <label for="profileImage" class="relative w-32 h-32 rounded-full border-2 border-dashed border-gray-600 overflow-hidden cursor-pointer bg-gray-800 flex items-center justify-center">
+            <!-- Placeholder -->
+            <div id="profilePlaceholder" class="flex flex-col items-center justify-center text-gray-500">
+              <i class="fa fa-camera mb-1 text-2xl"></i>
+              <span class="text-sm">Upload</span>
+            </div>
+
+            <!-- Preview -->
+            <img id="profilePreview" src="#" alt="Preview"
+                class="hidden absolute inset-0 w-full h-full object-cover rounded-full">
+
+            <!-- Hidden File Input -->
+            <input type="file" id="profileImage" name="user_image" accept="image/*"
+                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+          </label>
+
+          <p class="text-gray-400 text-xs mt-2 text-center">
+            Recommended size: <strong>400×400px</strong> (JPG, PNG)
+          </p>
+        </div>
+
+
+      </div>
 
       <button type="submit"
               class="w-full bg-green-500 hover:bg-green-600 text-gray-900 font-semibold py-3 rounded-lg mt-4 transition">
@@ -85,7 +125,7 @@
       </button>
     </form>
 
-    <!-- Alert -->
+    <!-- Alert Section (unchanged) -->
     {% if messages %}
       {% for message in messages %}
         <div id="alert-box"
@@ -97,7 +137,6 @@
       {% endfor %}
 
       <script>
-        // Auto fade alert after 1 second
         setTimeout(() => {
           const alert = document.getElementById("alert-box");
           if (alert) {
@@ -130,11 +169,30 @@
           }
         });
 
-        if (hasEmpty) {
-          e.preventDefault();
+        if (hasEmpty) e.preventDefault();
+      });
+
+      const profileInput = document.getElementById("profileImage");
+      const profilePreview = document.getElementById("profilePreview");
+      const profilePlaceholder = document.getElementById("profilePlaceholder");
+
+      profileInput.addEventListener("change", function() {
+        const file = this.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            profilePreview.src = e.target.result;
+            profilePreview.classList.remove("hidden");
+            profilePlaceholder.classList.add("hidden");
+          }
+          reader.readAsDataURL(file);
+        } else {
+          profilePreview.classList.add("hidden");
+          profilePlaceholder.classList.remove("hidden");
         }
       });
     </script>
+
   </div>
 </body>
 </html>

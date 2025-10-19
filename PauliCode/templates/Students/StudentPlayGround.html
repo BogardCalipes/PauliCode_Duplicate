@@ -6,6 +6,7 @@
 <title>Playground - {{ problem.problem_title }}</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<link rel="icon" type="image/png" href="{% static 'img/favicon.ico' %}">
 <style>
 body { background-color: #1E2835; color: #e0e0e0; }
 .card { background-color: #212529; color: #e0e0e0; border-radius: 8px; border: 1px solid #2b3a55; margin-bottom: 15px; }
@@ -198,7 +199,6 @@ document.getElementById("language").addEventListener("change", e => {
 
 function getCode() { return editor.getValue(); }
 
-// Helpers to avoid embedding templates inside JS
 function getProblemTestCount() {
   const meta = document.getElementById('problemMeta');
   return parseInt(meta?.dataset?.testCount || '0', 10);
@@ -208,13 +208,12 @@ function getProblemTotalScore() {
   return parseInt(meta?.dataset?.totalScore || '0', 10);
 }
 
-// Animate per-test updates and update score incrementally
 function animateTestUpdates(testResults) {
   const totalPoints = getProblemTestCount() * 10;
   let runningScore = 0;
 
   testResults.forEach((res, idx) => {
-    const delay = idx * 350; // stagger
+    const delay = idx * 350;
     setTimeout(() => {
       const id = `tcStatus${idx+1}`;
       const el = document.getElementById(id);
@@ -230,14 +229,12 @@ function animateTestUpdates(testResults) {
         el.className = 'badge bg-secondary';
         el.textContent = `Hidden`;
       }
-      // Update score badge as we go
       document.getElementById('studentScoreValue').textContent = runningScore;
       document.getElementById('studentScoreTotal').textContent = totalPoints;
     }, delay);
   });
 }
 
-// Parse result_summary into boolean array: true=passed, false=failed, null=hidden/not reported
 function parseResultSummary(resultSummary) {
   const lines = (resultSummary || '').split('\n');
   const testCount = getProblemTestCount();
@@ -255,7 +252,6 @@ function parseResultSummary(resultSummary) {
 }
 
 async function runCode(checkMode=false) {
-  // Make DOM refs available outside try so catch can safely reference them
   const modalOutput = checkMode ? document.getElementById('checkResult') : document.getElementById('terminalOutput');
   const checkLoading = document.getElementById('checkLoading');
 
@@ -294,11 +290,8 @@ async function runCode(checkMode=false) {
       checkLoading.style.display = "none";
       if (data.error) { modalOutput.textContent = "⚠️ " + data.error; return; }
 
-      // parse structured results and animate per-test updates
       const testResults = parseResultSummary(data.result_summary);
       animateTestUpdates(testResults);
-
-      // show textual summary in modal as well
       modalOutput.innerHTML = `<pre style="color:#28a745;">${data.result_summary}</pre>`;
       document.getElementById('submitBtn').style.display = 'inline-block';
     } else {
@@ -312,113 +305,20 @@ async function runCode(checkMode=false) {
   }
 }
 
-async function submitCode() {
-  // DOM refs available outside try for catch safety
-  const checkResultDiv = document.getElementById('checkResult');
-  const checkLoading = document.getElementById('checkLoading');
+let hasSubmitted = false;
 
-  checkResultDiv.textContent = "";
-  checkLoading.style.display = "flex";
-
-  try {
-    const code = getCode();
-    const problemId = "{{ problem.problem_id }}";
-    const lang = document.getElementById('language').value;
-
-    const response = await fetch(`/submit_problem/${problemId}/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": "{{ csrf_token }}"
-      },
-      body: JSON.stringify({
-        problem_id: problemId,
-        code: code,
-        language: lang
-      })
-    });
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (err) {
-      const text = await response.clone().text();
-      checkLoading.style.display = "none";
-      checkResultDiv.textContent = "⚠️ Server error (non-JSON). Check console for details.";
-      console.error("Server returned non-JSON response:", text);
-      return;
-    }
-
-    checkLoading.style.display = "none";
-
-    if (data.success) {
-      const testResults = parseResultSummary(data.result_summary);
-      animateTestUpdates(testResults);
-
-      // ensure score reflects final total as returned
-      const finalScore = data.score ?? (testResults.filter(Boolean).length * 10);
-      document.getElementById('studentScoreValue').textContent = finalScore;
-      document.getElementById('studentScoreTotal').textContent = (getProblemTestCount() * 10);
-
-      checkResultDiv.innerHTML = `<pre style="color:#28a745;">${data.result_summary}</pre>`;
-      setTimeout(() => {
-        window.location.href = data.redirect_url || "{% url 'StudentClass' %}";
-      }, 1500);
-    } else {
-      checkResultDiv.textContent = "⚠️ " + (data.message || "Submission failed.");
-    }
-  } catch (error) {
-    checkLoading.style.display = "none";
-    checkResultDiv.textContent = "⚠️ Submission failed: " + error.message;
-    console.error(error);
+// Named beforeunload handler so we can remove it when needed
+function beforeUnloadHandler(e) {
+  if (!hasSubmitted) {
+    e.preventDefault();
+    e.returnValue = "Are you sure you want to leave? Your work will be submitted automatically.";
+    autoSubmitOnTimeout();
+    hasSubmitted = true;
   }
 }
+window.addEventListener("beforeunload", beforeUnloadHandler);
 
-
-// =============================
-//  COUNTDOWN TIMER SECTION
-// =============================
-(function startCountdownTimer() {
-  const timerMeta = document.getElementById('problemTimer');
-  if (!timerMeta) return;
-
-  const timeLimitMinutes = parseInt(timerMeta.dataset.timelimit || '0', 10);
-  if (isNaN(timeLimitMinutes) || timeLimitMinutes <= 0) return;
-
-  let remaining = timeLimitMinutes * 60; // seconds
-  const timerDisplay = document.getElementById('timerDisplay');
-
-  function formatTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  }
-
-  const tick = setInterval(() => {
-    if (!timerDisplay) return;
-
-    if (remaining <= 0) {
-      clearInterval(tick);
-      timerDisplay.textContent = "⏱️ Time’s up!";
-      timerDisplay.classList.remove('text-warning');
-      timerDisplay.classList.add('text-danger');
-      alert("Time is up! Your code will be automatically submitted.");
-
-      // Automatically trigger submission using existing logic
-      autoSubmitOnTimeout();
-      return;
-    }
-
-    timerDisplay.textContent = formatTime(remaining);
-    remaining--;
-  }, 1000);
-})();
-
-// =============================
-// AUTO SUBMIT ON TIMEOUT
-// =============================
-async function autoSubmitOnTimeout() {
-  // Reuse DOM references like the manual submit does
+async function submitCode() {
   const checkResultDiv = document.getElementById('checkResult');
   const checkLoading = document.getElementById('checkLoading');
 
@@ -447,10 +347,120 @@ async function autoSubmitOnTimeout() {
     checkLoading.style.display = "none";
 
     if (data.success) {
+      const testResults = parseResultSummary(data.result_summary);
+      animateTestUpdates(testResults);
+
+      const finalScore = data.score ?? (testResults.filter(Boolean).length * 10);
+      document.getElementById('studentScoreValue').textContent = finalScore;
+      document.getElementById('studentScoreTotal').textContent = (getProblemTestCount() * 10);
+
+      checkResultDiv.innerHTML = `<pre style="color:#28a745;">${data.result_summary}</pre>`;
+
+      // ✅ Disable unload prompt after manual submit
+      hasSubmitted = true;
+      window.removeEventListener("beforeunload", beforeUnloadHandler);
+
+      localStorage.removeItem(`problem_timer_{{ problem.problem_id }}`);
+      setTimeout(() => {
+        window.location.href = data.redirect_url || "{% url 'StudentClass' %}";
+      }, 1500);
+    } else {
+      checkResultDiv.textContent = "⚠️ " + (data.message || "Submission failed.");
+    }
+  } catch (error) {
+    checkLoading.style.display = "none";
+    checkResultDiv.textContent = "⚠️ Submission failed: " + error.message;
+    console.error(error);
+  }
+}
+
+// =============================
+//  COUNTDOWN TIMER (Persistent)
+// =============================
+(function startPersistentCountdown() {
+  const timerMeta = document.getElementById('problemTimer');
+  if (!timerMeta) return;
+
+  const problemId = "{{ problem.problem_id }}";
+  const storageKey = `problem_timer_${problemId}`;
+  const timeLimitMinutes = parseInt(timerMeta.dataset.timelimit || '0', 10);
+  if (isNaN(timeLimitMinutes) || timeLimitMinutes <= 0) return;
+
+  const timerDisplay = document.getElementById('timerDisplay');
+  let deadline;
+
+  const savedData = localStorage.getItem(storageKey);
+  if (savedData) {
+    const parsed = JSON.parse(savedData);
+    deadline = new Date(parsed.deadline);
+  } else {
+    const now = new Date();
+    deadline = new Date(now.getTime() + timeLimitMinutes * 60 * 1000);
+    localStorage.setItem(storageKey, JSON.stringify({ deadline: deadline.toISOString() }));
+  }
+
+  const tick = setInterval(() => {
+    const now = new Date();
+    const remaining = Math.floor((deadline - now) / 1000);
+
+    if (remaining <= 0) {
+      clearInterval(tick);
+      timerDisplay.textContent = "⏱️ Time’s up!";
+      timerDisplay.classList.remove('text-warning');
+      timerDisplay.classList.add('text-danger');
+      localStorage.removeItem(storageKey);
+      alert("Time is up! Your code will be submitted automatically.");
+      autoSubmitOnTimeout();
+      return;
+    }
+
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    timerDisplay.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }, 1000);
+})();
+
+// =============================
+// AUTO SUBMIT ON TIMEOUT
+// =============================
+async function autoSubmitOnTimeout() {
+  const checkResultDiv = document.getElementById('checkResult');
+  const checkLoading = document.getElementById('checkLoading');
+
+  checkResultDiv.textContent = "";
+  checkLoading.style.display = "flex";
+
+  try {
+    const code = getCode();
+    const problemId = "{{ problem.problem_id }}";
+    const lang = document.getElementById('language').value;
+
+    const response = await fetch(`/submit_problem/${problemId}/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": "{{ csrf_token }}"
+      },
+      body: JSON.stringify({
+        problem_id: problemId,
+        code: code,
+        language: lang
+      })
+    });
+
+    const data = await response.json();
+    checkLoading.style.display = "none";
+    localStorage.removeItem(`problem_timer_${problemId}`);
+
+    // ✅ Disable unload handler after auto-submit
+    hasSubmitted = true;
+    window.removeEventListener("beforeunload", beforeUnloadHandler);
+
+    if (data.success) {
       alert("✅ Time’s up! Your code has been submitted automatically.");
       window.location.href = data.redirect_url;
     } else {
-      alert("⚠️ Auto-submit failed. Redirecting to class page...");
+      alert("⚠️ Auto-submit failed. Redirecting...");
       window.location.href = "{% url 'student_class_details' problem.class_id.class_id %}";
     }
   } catch (error) {
@@ -475,8 +485,6 @@ async function autoSubmitOnTimeout() {
 // =============================
 //  DETECT TAB SWITCH OR PAGE CLOSE
 // =============================
-let hasSubmitted = false;
-
 window.addEventListener("blur", () => {
   if (!hasSubmitted) {
     alert("🚫 You switched tabs! Your session will end for security.");
@@ -484,18 +492,9 @@ window.addEventListener("blur", () => {
     hasSubmitted = true;
   }
 });
-
-window.addEventListener("beforeunload", (e) => {
-  if (!hasSubmitted) {
-    e.preventDefault();
-    e.returnValue = "Are you sure you want to leave? Your work will be submitted automatically.";
-    autoSubmitOnTimeout();
-    hasSubmitted = true;
-  }
-});
-
-
-
 </script>
+
+
+
 </body>
 </html>

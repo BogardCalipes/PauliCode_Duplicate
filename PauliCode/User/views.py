@@ -7,6 +7,7 @@ import json, requests, subprocess, tempfile, os, shutil
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.urls import reverse
+from django.db.models import Q
 from django.core.serializers.json import DjangoJSONEncoder
 
 
@@ -93,6 +94,7 @@ def signup(request):
         user_type = request.POST.get('user_type', '').strip()
         password = request.POST.get('password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
+        user_image = request.FILES.get('user_image')  # <-- handle uploaded file
 
         context = {
             'first_name': first_name,
@@ -113,17 +115,21 @@ def signup(request):
             messages.error(request, "School ID already exists.")
             return render(request, 'User/sign-up.html', context)
 
-        User.objects.create(
+        # Create the user including the uploaded image if available
+        user = User.objects.create(
             school_id=school_id,
             first_name=first_name,
             last_name=last_name,
             password=password,
-            user_type=user_type.capitalize()
+            user_type=user_type.capitalize(),
+            user_image=user_image if user_image else 'profile_pic/image.png'
         )
+
         messages.success(request, "Account created successfully!")
         return render(request, 'User/sign-up.html', {'redirect': True})
 
     return render(request, 'User/sign-up.html')
+
 
 
 # ---------------- CLASS MANAGEMENT ---------------- #
@@ -182,15 +188,24 @@ def MyClasses(request):
 
 
 def delete_class(request, class_id):
+    """Deletes a class created by the teacher and redirects to the appropriate page."""
     school_id = request.session.get('school_id')
     if not school_id:
         messages.warning(request, "Please log in first.")
         return redirect('index')
 
-    class_obj = get_object_or_404(Class, class_id=class_id, teacher__school_id=school_id)
+    # Get class belonging to the teacher
+    class_obj = get_object_or_404(Class, pk=class_id, teacher__school_id=school_id)
     class_obj.delete()
-    messages.success(request, "Class deleted successfully!")
-    return redirect('MyClasses')
+    messages.success(request, 'Class deleted successfully!')
+
+    # Redirect based on where the request came from
+    referer = request.META.get('HTTP_REFERER', '')
+    if 'report' in referer.lower():
+        return redirect('report')
+    else:
+        return redirect('MyClasses')
+
 
 # ---------------- CLASS DETAILS PAGE ---------------- #
 
@@ -415,6 +430,105 @@ def edit_problem(request, problem_id):
             messages.error(request, f"Update failed: {e}")
 
     return redirect('classDetails', class_id=class_id)
+
+
+# ---------- REPORT DASHBOARD ----------  
+def report(request):
+    if not request.session.get('school_id'):
+        messages.warning(request, "Please log in first.")
+        return redirect('index')
+
+    user = User.objects.get(school_id=request.session['school_id'])
+
+    # Filter only the teacher’s own classes
+    if user.user_type.lower() == 'teacher':
+        classes = Class.objects.filter(teacher=user).order_by('class_id')
+    else:
+        classes = Class.objects.filter(enrollment__student_id=user).distinct().order_by('class_id')
+
+    # Handle search input
+    search_query = request.GET.get('search', '').strip()
+    selected_class = None
+
+    if search_query:
+        selected_class = classes.filter(
+            Q(title__icontains=search_query) | Q(class_code__icontains=search_query)
+        ).first()
+
+    # Problems and submissions for the selected class
+    problems = Problem.objects.filter(class_id__in=classes).select_related('class_id').order_by('problem_id')
+    submissions = Submission.objects.select_related(
+        'student_id', 'problem_id', 'problem_id__class_id'
+    ).filter(problem_id__in=problems).exclude(submission_id__isnull=True)
+
+    # Students in the teacher’s classes
+    students = User.objects.filter(
+        user_type__iexact='student',
+        enrollment__class_id__in=classes
+    ).distinct().order_by('school_id')
+
+    # Students enrolled in the selected class
+    enrolled_students = []
+    if selected_class:
+        enrolled_students = students.filter(enrollment__class_id=selected_class).distinct()
+
+    # Counts for summary
+    total_students = students.count()
+    total_submissions = submissions.count()
+    pending_reviews = submissions.filter(score__isnull=True).count()
+
+    context = {
+        'user': user,
+        'classes': classes,
+        'problems': problems,
+        'students': students,
+        'enrolled_students': enrolled_students,
+        'submissions': submissions,
+        'selected_class': selected_class,
+        'total_students': total_students,
+        'total_submissions': total_submissions,
+        'pending_reviews': pending_reviews,
+        'currentpage': 'report',
+        'search_query': search_query,
+    }
+
+    return render(request, 'User/report.html', context)
+
+
+# ---------- DELETE STUDENT ----------
+def delete_student(request, school_id):
+    student = get_object_or_404(User, school_id=school_id, user_type__iexact='student')
+    student.delete()
+    messages.success(request, 'Student deleted successfully!')
+    return redirect('report')
+
+
+
+
+# ---------------- REVIEW SUBMISSION ---------------- #
+def review_submission(request, submission_id):
+    submission = get_object_or_404(Submission, submission_id=submission_id)
+
+    if request.method == 'POST':
+        new_status = request.POST.get('status')
+        feedback = request.POST.get('feedback')
+        submission.status = new_status
+        submission.feedback = feedback
+        submission.save()
+        messages.success(request, '✅ Submission review updated successfully!')
+        return redirect('report')
+
+    return render(request, 'review_submission.html', {'submission': submission})
+
+
+# ---------- DELETE SUBMISSION ----------
+def delete_submission(request, submission_id):
+    submission = get_object_or_404(Submission, submission_id=submission_id)
+    submission.delete()
+    messages.success(request, 'Student submission deleted successfully!')
+    return redirect('report')
+
+
 
 
 #---------------Student Part-------------------------#
