@@ -33,7 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # for static files
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # must be directly after SecurityMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -91,7 +91,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # =======================
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Manila'  # local timezone (optional)
+TIME_ZONE = 'Asia/Manila'
 USE_I18N = True
 USE_TZ = True
 
@@ -99,7 +99,7 @@ USE_TZ = True
 # Static files (Render + WhiteNoise)
 # =======================
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / "User/static"]
+STATICFILES_DIRS = [BASE_DIR / 'User' / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
@@ -130,3 +130,10 @@ JAZZMIN_UI_TWEAKS = {
     "dark_mode_theme": "solar",
     "sidebar_fixed": True,
 }
+
+# =======================
+# Extra for Render (optional fallback)
+# =======================
+# Allow Django to serve media during Render (since free plan can't use Nginx)
+if not DEBUG:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
