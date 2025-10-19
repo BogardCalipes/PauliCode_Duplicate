@@ -1,5 +1,5 @@
 """
-Django settings for PauliCode project (Render-ready deployment).
+Django settings for PauliCode project — Render deployment ready.
 """
 
 from pathlib import Path
@@ -12,9 +12,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # =======================
 # Security
 # =======================
-SECRET_KEY = config('DJANGO_SECRET_KEY', default='fallback-secret-key')
+SECRET_KEY = config('DJANGO_SECRET_KEY', default='unsafe-secret-key')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = ['PauliCode.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['paulicode.onrender.com', 'localhost', '127.0.0.1']
 
 # =======================
 # Application definition
@@ -33,6 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # for static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -59,17 +60,20 @@ TEMPLATES = [
     },
 ]
 
+# =======================
+# ASGI / WSGI
+# =======================
+ASGI_APPLICATION = 'PauliCode.asgi.application'
 WSGI_APPLICATION = 'PauliCode.wsgi.application'
 
 # =======================
-# Database (PostgreSQL for Render)
+# Database (Render PostgreSQL)
 # =======================
 DATABASES = {
     'default': dj_database_url.config(
-        default=config(
-            'DATABASE_URL',
-            default='sqlite:///' + str(BASE_DIR / 'db.sqlite3')
-        )
+        default=config('DATABASE_URL'),
+        conn_max_age=600,
+        ssl_require=True
     )
 }
 
@@ -87,16 +91,17 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # =======================
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Manila'  # local timezone (optional)
 USE_I18N = True
 USE_TZ = True
 
 # =======================
-# Static files
+# Static files (Render + WhiteNoise)
 # =======================
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / "User/static"]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # =======================
 # Media files
@@ -110,45 +115,18 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # =======================
-# Jazzmin UI settings
+# Jazzmin UI Settings
 # =======================
 JAZZMIN_SETTINGS = {
     "site_title": "PauliCode Admin",
     "site_header": "PauliCode",
     "site_brand": "PauliCode",
-    "welcome_sign": "Welcome to the PauliCode Admin",
+    "welcome_sign": "Welcome to PauliCode Admin",
     "show_ui_builder": True,
 }
 
 JAZZMIN_UI_TWEAKS = {
-    "navbar_small_text": False,
-    "footer_small_text": False,
-    "body_small_text": False,
-    "brand_small_text": False,
-    "brand_colour": "navbar-cyan",
-    "accent": "accent-lightblue",
-    "navbar": "navbar-dark",
-    "no_navbar_border": False,
-    "navbar_fixed": False,
-    "layout_boxed": False,
-    "footer_fixed": False,
-    "sidebar_fixed": True,
-    "sidebar": "sidebar-dark-info",
-    "sidebar_nav_small_text": False,
-    "sidebar_disable_expand": False,
-    "sidebar_nav_child_indent": False,
-    "sidebar_nav_compact_style": False,
-    "sidebar_nav_legacy_style": False,
-    "sidebar_nav_flat_style": False,
     "theme": "cyborg",
     "dark_mode_theme": "solar",
-    "button_classes": {
-        "primary": "btn-primary",
-        "secondary": "btn-secondary",
-        "info": "btn-info",
-        "warning": "btn-warning",
-        "danger": "btn-danger",
-        "success": "btn-success"
-    },
-    "actions_sticky_top": False
+    "sidebar_fixed": True,
 }
