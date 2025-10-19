@@ -65,15 +65,12 @@
       <li class="nav-item mb-4">
         <a href="#" class="d-flex flex-column align-items-center text-decoration-none text-white">
           <div class="profile-pic border-radius-md overflow-hidden mb-2">
-            {% if user.user_image and user.user_image.url %}
-              <img src="{{ user.user_image.url }}" 
+          
+            <img src="{% static 'img/default.png' %}"  
                   alt="Profile Picture" 
                   class="img-fluid rounded-circle profile-img">
-            {% else %}
-              <img src="{% static 'img/default.png' %}" 
-                  alt="Default Profile Picture" 
-                  class="img-fluid rounded-circle profile-img">
-            {% endif %}
+         
+            
           </div>
           <span class="fw-bold username">
             {{ user.first_name }} {{ user.last_name }}
