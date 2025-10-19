@@ -11,3 +11,6 @@ python manage.py migrate
 
 # Collect static files
 python manage.py collectstatic --no-input
+
+# Create superuser (non-interactive)
+python manage.py createsuperuser --noinput || true
