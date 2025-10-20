@@ -137,13 +137,7 @@
       {% for enrollment in students %}
         <li class="list-group-item bg-transparent text-white d-flex align-items-center justify-content-between border-0 py-2">
           <div class="d-flex align-items-center">
-            {% if enrollment.student_id.user_image %}
-              <img src="{% static ''img/default.png' %}" alt="student" 
-                   class="rounded-circle me-2" width="35" height="35">
-            {% else %}
-              <img src="{% static 'img/default_user.png' %}" alt="student" 
-                   class="rounded-circle me-2" width="35" height="35">
-            {% endif %}
+            
             <span>{{ enrollment.student_id.first_name }} {{ enrollment.student_id.last_name }}</span>
           </div>
           <span class="badge bg-secondary small">{{ enrollment.student_id.school_id }}</span>
