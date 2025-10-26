@@ -1,0 +1,101 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+{% if currentpage != "sign-up" %}
+  {% include "partials/header.html" %}
+{% else %}
+  <head>
+    <meta charset="UTF-8">
+    <title>Create Account | PauliCode</title>
+    <link rel="icon" type="image/png" href="{% static 'img/favicon.ico' %}">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      body.index-page { background-color: #1a1a1a; }
+      body.other-page { background-color: #111827; }
+
+      /* Loading screen */
+      #loading-screen {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-color: #273149;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        z-index: 9999;
+        transition: opacity 0.6s ease;
+      }
+
+      #loading-screen.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #main-content {
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+
+      #main-content.visible {
+        opacity: 1;
+      }
+
+      .loading-spinner-ring {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.12);
+        border-top-color: #fff;
+        animation: spin 0.85s linear infinite;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      @keyframes spin {
+        to { transform: translate(-50%, -50%) rotate(360deg); }
+      }
+
+      .loading-icon {
+        width: 100px;
+        height: 100px;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2;
+      }
+    </style>
+  </head>
+{% endif %}
+
+<body class="g-sidenav-show text-white {% if currentpage == 'index' %}index-page{% else %}other-page{% endif %}">
+
+  <!-- 🔄 Loading Screen -->
+  <div id="loading-screen">
+    {% include "loading.html" %}
+  </div>
+
+  <!-- 🧱 Main Page Content -->
+  <div id="main-content">
+    {% block content %}{% endblock %}
+  </div>
+
+  <script>
+    window.addEventListener("load", function () {
+      const loader = document.getElementById("loading-screen");
+      const main = document.getElementById("main-content");
+
+      loader.classList.add("hidden");
+      setTimeout(() => {
+        loader.style.display = "none";
+        main.classList.add("visible");
+      }, 600);
+    });
+  </script>
+</body>
+</html>

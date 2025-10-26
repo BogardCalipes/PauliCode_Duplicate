@@ -1,7 +1,8 @@
+{% extends "base.html" %}
 {% load static %}
-{% include "partials/header.html" %}
 
-<body class="g-sidenav-show text-white">
+{% block content %}
+<div>
 {% include "partials/sidebar.html" %}
 
 <style>
@@ -200,5 +201,6 @@
 </script>
 
 {% include "partials/scripts.html" %}
-</body>
-</html>
+</div>
+
+{% endblock %}

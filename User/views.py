@@ -21,7 +21,7 @@ def index(request):
             return redirect('dashboard')
         else:
             return redirect('StudentDashboard')
-    return render(request, 'User/index.html')
+    return render(request, 'User/index.html', {'currentpage': 'index'})
 
 
 
@@ -94,7 +94,7 @@ def signup(request):
         user_type = request.POST.get('user_type', '').strip()
         password = request.POST.get('password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
-        user_image = request.FILES.get('user_image')  # <-- handle uploaded file
+        user_image = request.FILES.get('user_image')  # handle uploaded file
 
         context = {
             'first_name': first_name,
@@ -103,6 +103,7 @@ def signup(request):
             'user_type': user_type,
         }
 
+        # ✅ Validate inputs
         if not all([first_name, last_name, school_id, user_type, password, confirm_password]):
             messages.error(request, "Please fill in all fields.")
             return render(request, 'User/sign-up.html', context)
@@ -115,20 +116,20 @@ def signup(request):
             messages.error(request, "School ID already exists.")
             return render(request, 'User/sign-up.html', context)
 
-        # Create the user including the uploaded image if available
+        # ✅ Create new user
         user = User.objects.create(
             school_id=school_id,
             first_name=first_name,
             last_name=last_name,
             password=password,
             user_type=user_type.capitalize(),
-            user_image=user_image if user_image else 'profile_pic/image.png'
+            user_image=user_image if user_image else 'profile_pic/default.png'
         )
 
-        messages.success(request, "Account created successfully!")
-        return render(request, 'User/sign-up.html', {'redirect': True})
+        messages.success(request, "Account created successfully! Please log in.")
+        return redirect('index')  # ✅ Redirect to index.html (login page)
 
-    return render(request, 'User/sign-up.html')
+    return render(request, 'User/sign-up.html', {'currentpage': 'sign-up'})
 
 
 

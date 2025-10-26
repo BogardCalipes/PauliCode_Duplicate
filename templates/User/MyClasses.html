@@ -1,7 +1,43 @@
+{% extends "base.html" %}
 {% load static %}
-{% include "partials/header.html" %}
 
-<body class="g-sidenav-show text-white" style="background-color: #273149">
+{% block content %}
+
+ <style>
+    .cls-card {
+      width: 200px;
+      height: 200px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .cls-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+    }
+    .delete-btn {
+      display: none;
+    }
+    .cls-card:hover .delete-btn {
+      display: block;
+    }
+    .cls-img {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+    }
+    input[name="q"]:focus {
+      border-color: #198754;
+      box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+    }
+    .color-green{
+        background-color: rgb(35, 103, 51) !important;
+    }
+    
+
+   
+
+  </style>
+
+<div>
   <div class="min-height-300 position-absolute w-100"></div>
   {% include "partials/sidebar.html" %}
 
@@ -59,7 +95,7 @@
             </form>
 
             <div class="card-body d-flex flex-column justify-content-center align-items-center p-2">
-              <img src="{% static 'img/classroom.png' %}" 
+              <img src="{{ cls.upload_icon.url|default:'/media/class_icons/defaultClassIcon.png' }}" 
                   alt="Class Icon" 
                   class="rounded mb-2 cls-img">
               <h6 class="fw-bold mt-1 text-white">{{ cls.title }}</h6>
@@ -178,38 +214,7 @@
   });
   </script>
 
-  <style>
-    .cls-card {
-      width: 200px;
-      height: 200px;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .cls-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-    }
-    .delete-btn {
-      display: none;
-    }
-    .cls-card:hover .delete-btn {
-      display: block;
-    }
-    .cls-img {
-      width: 80px;
-      height: 80px;
-      object-fit: cover;
-    }
-    input[name="q"]:focus {
-      border-color: #198754;
-      box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
-    }
-    .color-green{
-        background-color: rgb(35, 103, 51) !important;
-    }
-    
+ 
+</div>
 
-   
-
-  </style>
-</body>
-</html>
+{% endblock %}

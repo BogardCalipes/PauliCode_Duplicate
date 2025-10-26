@@ -1,7 +1,9 @@
-{% load static %}
-{% include "partials/header.html" %}
 
-<body class="g-sidenav-show text-white" style="background-color: #1E2835;">
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="g-sidenav-show text-white" style="background-color: #1E2835;">
   <div class="min-height-300 position-absolute w-100"></div>
   {% include "partials/sidebar.html" %}
 
@@ -18,14 +20,14 @@
         <div class="d-flex align-items-center mt-2 mt-md-0">
           <a href="#" class="btn btn-outline-success fw-bold me-2 align-items-center"
              data-bs-toggle="modal" data-bs-target="#addProblemModal">
-            <img src="{% static 'img/PlusICon.png' %}" alt="add" style="width: 16px; height: 16px;" class="me-2">
+            <img src="{% static 'img/plusIcon.png' %}" alt="add" style="width: 16px; height: 16px;" class="me-2">
             Add Problem
           </a>
 
           <a href="{% url 'delete_class' class.class_id %}"
              class="btn btn-outline-danger fw-bold align-items-center"
              onclick="return confirm('Are you sure you want to delete this class?');">
-            <img src="{% static 'img/DeleteIcon.png' %}" alt="delete" style="width: 18px; height: 18px;" class="me-2">
+            <img src="{% static 'img/deleteIcon.png' %}" alt="delete" style="width: 18px; height: 18px;" class="me-2">
             Delete Class
           </a>
         </div>
@@ -137,6 +139,13 @@
       {% for enrollment in students %}
         <li class="list-group-item bg-transparent text-white d-flex align-items-center justify-content-between border-0 py-2">
           <div class="d-flex align-items-center">
+            {% if enrollment.student_id.user_image %}
+              <img src="{{ enrollment.student_id.user_image.url }}" alt="student" 
+                   class="rounded-circle me-2" width="35" height="35">
+            {% else %}
+              <img src="{% static 'img/default_user.png' %}" alt="student" 
+                   class="rounded-circle me-2" width="35" height="35">
+            {% endif %}
             <span>{{ enrollment.student_id.first_name }} {{ enrollment.student_id.last_name }}</span>
           </div>
           <span class="badge bg-secondary small">{{ enrollment.student_id.school_id }}</span>
@@ -261,7 +270,12 @@
   </main>
 
   {% include "partials/footer.html" %}
-  {% include "partials/scripts.html" %}
+  
+<script src="{% static 'js/core/popper.min.js' %}"></script>
+<script src="{% static 'js/core/bootstrap.min.js' %}"></script>
+<script src="{% static 'js/plugins/perfect-scrollbar.min.js' %}"></script>
+<script src="{% static 'js/plugins/smooth-scrollbar.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <!-- JavaScript: Load problem details dynamically -->
   <script>
@@ -312,5 +326,5 @@
     .card { background-color: #2C3648 !important; }
     .small-placeholder::placeholder { font-size: 0.65rem; color: #b0b0b0; }
   </style>
-</body>
-</html>
+</div>
+{% endblock %}

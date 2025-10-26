@@ -1,14 +1,9 @@
+{% extends "base.html" %}
 {% load static %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Create Account | PauliCode</title>
-  <link rel="icon" type="image/png" href="{% static 'img/favicon.ico' %}">
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-900 text-white font-sans flex flex-col md:flex-row min-h-screen">
+
+{% block content %}
+<div class="bg-gray-900 text-white font-sans flex flex-col md:flex-row min-h-screen">
 
   <!-- Left Section -->
   <div class="md:w-2/5 w-full relative flex flex-col items-center justify-center overflow-hidden">
@@ -107,7 +102,7 @@
                 class="hidden absolute inset-0 w-full h-full object-cover rounded-full">
 
             <!-- Hidden File Input -->
-            <input type="file" id="#" name="#" accept="#"
+            <input type="file" id="profileImage" name="user_image" accept="image/*"
                   class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
           </label>
 
@@ -194,5 +189,5 @@
     </script>
 
   </div>
-</body>
-</html>
+</div>
+{% endblock %}

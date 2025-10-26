@@ -1,7 +1,8 @@
+{% extends "base.html" %}
 {% load static %}
-{%include "partials/header.html"%}
 
-<body class="" style="background-color: #1a1a1a;">
+{% block content %}
+<div>
   <main class="main-content mt-2 mb-5">
     <section>
       <div class="page-header min-vh-100 d-flex align-items-center justify-content-center">
@@ -80,8 +81,82 @@
       </div>
     </section>
   </main>
+   <div class="modal fade" id="createClassModal" tabindex="-1" aria-labelledby="createClassLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content shadow-lg border-0" style="background-color: #1E2835; color: #fff; border-radius: 16px;">
+          <div class="modal-header border-0 pb-1">
+            <h5 class="modal-title fw-bold text-success" id="createClassLabel">
+              <i class="fa fa-layer-group"></i> Create New Class
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+
+          <div class="modal-body pt-0">
+            <p class="text-muted small mb-4">
+              Fill in the details below to set up your new class environment.
+            </p>
+
+            <form id="createClassForm" method="POST" enctype="multipart/form-data" action="{% url 'create_class' %}">
+              {% csrf_token %}
+
+              <!-- Upload Section -->
+              <div class="mb-4">
+                <label class="form-label fw-bold">Class Thumbnail</label>
+                <div class="upload-box border border-2 border-dashed rounded d-flex align-items-center justify-content-center position-relative overflow-hidden" 
+                    style="width: 120px; height: 120px; background-color: #101826; cursor: pointer;">
+                  <input type="file" id="uploadIcon" name="upload_icon" accept="image/*" class="position-absolute w-100 h-100 opacity-0" style="cursor: pointer;">
+                  <div class="text-center" id="uploadPlaceholder">
+                    <i class="fa fa-camera mb-2 text-muted" style="font-size: 28px;"></i>
+                    <p class="small text-muted mb-0">Upload</p>
+                  </div>
+                  <img id="previewImage" src="#" alt="Preview" class="d-none position-absolute top-0 start-0 w-100 h-100 rounded" style="object-fit: cover;">
+                </div>
+                <p class="text-muted small mt-2 mb-0">Recommended size: <strong>400×400px</strong> (JPG, PNG)</p>
+              </div>
+
+              <!-- Class Code -->
+              <div class="mb-3">
+                <label class="form-label fw-bold">Class Code</label>
+                <div class="input-group">
+                  <span class="input-group-text bg-success border-0 text-white fw-bold">#</span>
+                  <input type="text" name="class_code" class="form-control text-white p-2"
+                        placeholder="Enter unique class code (e.g., APPDEV3)"
+                        style="background-color: #101826; border: 1px solid #4CD964; border-radius: 0 8px 8px 0;">
+                </div>
+              </div>
+
+              <!-- Class Title -->
+              <div class="mb-3">
+                <label class="form-label fw-bold">Class Title</label>
+                <input type="text" name="title" class="form-control text-white"
+                      placeholder="Enter class title (e.g., Application Development)"
+                      style="background-color: #101826; border: 1px solid #555; border-radius: 8px;">
+              </div>
+
+              <!-- Description -->
+              <div class="mb-4">
+                <label class="form-label fw-bold">Class Description</label>
+                <textarea name="description" rows="3" class="form-control text-white"
+                          placeholder="Enter class description..."
+                          style="background-color: #101826; border: 1px solid #555; border-radius: 8px;"></textarea>
+              </div>
+
+              <!-- Buttons -->
+              <div class="d-flex justify-content-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm me-2 px-3" data-bs-dismiss="modal">
+                  <i class="fa fa-times me-1"></i> Cancel
+                </button>
+                <button type="submit" class="btn btn-success btn-sm px-3">
+                  <i class="fa fa-plus me-1"></i> Create Class
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
   <!--   Core JS Files   -->
  {%include "partials/scripts.html"%}
-</body>
+  </div>
+  {% endblock %}
 
-</html>

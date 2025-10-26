@@ -1,4 +1,7 @@
+{% extends "base.html" %}
 {% load static %}
+
+{% block content %}
 {% include "partials/header.html" %}
 
 <body class="g-sidenav-show text-white" style="background-color: #1E2835;">
@@ -20,7 +23,7 @@
           <a href="{% url 'unenroll_class' class.class_id %}" 
              class="btn btn-outline-danger fw-bold align-items-center"
              onclick="return confirm('Are you sure you want to unenroll from this class?');">
-            <img src="{% static 'img/DeleteIcon.png' %}" alt="unenroll" style="width: 18px; height: 18px;" class="me-2">
+            <img src="{% static 'img/deleteIcon.png' %}" alt="unenroll" style="width: 18px; height: 18px;" class="me-2">
             Unenroll
           </a>
         </div>
@@ -29,10 +32,6 @@
       <div class="mt-3">
         <span class="badge bg-success px-3 py-2">{{ class.class_code }}</span>  
         <span class="badge bg-primary px-3 py-2 mx-2">{{ class.teacher }}</span>
-      </div>
-
-      <div>
-        
       </div>
     </div>
 
@@ -82,45 +81,34 @@
           {% if problems %}
           <div class="row g-3">
             {% for problem in problems %}
-<div class="col-md-6">
-  <div class="card bg-transparent text-white border 
-              {% if problem.problem.problem_type == 'Quiz' %}border-success{% else %}border-warning{% endif %}
-              rounded-3 p-3 shadow-sm h-100 problem-card"
-       data-problem-id="{{ problem.problem.problem_id }}"
-       style="cursor: pointer; position: relative;">
+            <div class="col-md-6">
+              <div class="card bg-transparent text-white border 
+                  {% if problem.problem.problem_type == 'Quiz' %}border-success{% else %}border-warning{% endif %}
+                  rounded-3 p-3 shadow-sm h-100 problem-card"
+                  data-problem-id="{{ problem.problem.problem_id }}"
+                  style="cursor: pointer; position: relative;">
 
-    <div class="d-flex justify-content-between align-items-start">
-      <h6 class="fw-bold mb-2 text-white">{{ problem.problem.problem_title }}</h6>
+                <div class="d-flex justify-content-between align-items-start">
+                  <h6 class="fw-bold mb-2 text-white">{{ problem.problem.problem_title }}</h6>
 
-   {% if problem.score is not None %}
-  {% if problem.score >= problem.half_score %}
-    <h5 class="fw-bold text-success">{{ problem.score }}/{{ problem.problem.total_score }}</h5>
-  {% else %}
-    <h5 class="fw-bold text-danger">{{ problem.score }}/{{ problem.problem.total_score }}</h5>
-  {% endif %}
-{% else %}
-  <h6 class="text-muted">No score yet</h6>
-{% endif %}
+                  {% if problem.score is not None %}
+                    {% if problem.score >= problem.half_score %}
+                      <h5 class="fw-bold text-success">{{ problem.score }}/{{ problem.problem.total_score }}</h5>
+                    {% else %}
+                      <h5 class="fw-bold text-danger">{{ problem.score }}/{{ problem.problem.total_score }}</h5>
+                    {% endif %}
+                  {% else %}
+                    <h6 class="text-muted">No score yet</h6>
+                  {% endif %}
 
-
-
-
-      <span class="badge 
-        {% if problem.problem.problem_type == 'Quiz' %}bg-success{% else %}bg-warning text-dark{% endif %}">
-        Due: {{ problem.problem.due_date|date:"M d, Y H:i" }}
-      </span>
-    </div>
-
-    <!-- Centered Score Display -->
-  
-
-    <!-- Disabled Answer Button if already submitted -->
-  
-
-  </div>
-</div>
-{% endfor %}
-
+                  <span class="badge 
+                    {% if problem.problem.problem_type == 'Quiz' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                    Due: {{ problem.problem.due_date|date:"M d, Y H:i" }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
           </div>
           {% else %}
           <div class="p-3 rounded-3 text-center text-muted"
@@ -130,195 +118,64 @@
           {% endif %}
         </div>
       </div>
-
     </div>
 
   </main>
 
- <!-- PROBLEM DETAILS MODAL -->
-<div class="modal fade" id="problemDetailsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content text-white" style="background-color: #1E2835; border-radius: 15px; max-width: 800px; margin: auto;">
-      <!-- Header -->
-      <div class="modal-header border-0 pb-0">
-        <div class="w-100">
-          <div class="d-flex flex-wrap align-items-center justify-content-between">
-            <div>
-              <h4 class="fw-bold text-success mb-1" id="problem_title"></h4>
-              <span class="badge bg-info text-dark me-2" id="problem_type"></span>
-              <span class="badge bg-warning text-dark" id="due_date"></span>
+  <!-- PROBLEM DETAILS MODAL -->
+  <div class="modal fade" id="problemDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content text-white" style="background-color: #1E2835; border-radius: 15px; max-width: 800px; margin: auto;">
+        <div class="modal-header border-0 pb-0">
+          <div class="w-100">
+            <div class="d-flex flex-wrap align-items-center justify-content-between">
+              <div>
+                <h4 class="fw-bold text-success mb-1" id="problem_title"></h4>
+                <span class="badge bg-info text-dark me-2" id="problem_type"></span>
+                <span class="badge bg-warning text-dark" id="due_date"></span>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body px-4 pb-3">
+          <div class="container-fluid">
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="fw-semibold mb-1">Score</label>
+                <div id="total_score" class="p-2 rounded mb-2" style="background:#101826; border:1px solid #2b3a55;"></div>
+              </div>
+              <div class="col-md-6">
+                <label class="fw-semibold mb-1">Time Limit</label>
+                <div id="time_limit" class="p-2 rounded mb-2" style="background:#101826; border:1px solid #2b3a55;"></div>
+              </div>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-12">
+                <label class="fw-semibold mb-1">Instruction</label>
+                <div id="problem_description" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55; min-height:120px; white-space:pre-line; font-size: 12px;"></div>
+              </div>
+            </div>
+            <div class="row g-2">
+              <div class="col-12">
+                <label class="fw-semibold mb-2">Test Cases</label>
+                <div class="row g-2" id="test_cases_container"></div>
+              </div>
             </div>
           </div>
         </div>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <!-- Body -->
-      <div class="modal-body px-4 pb-3">
-        <div class="container-fluid">
-          <div class="row g-3 mb-3">
-            <!-- Left: Score -->
-            <div class="col-md-6">
-              <label class="fw-semibold mb-1">Score</label>
-              <div id="total_score" class="p-2 rounded mb-2" style="background:#101826; border:1px solid #2b3a55;"></div>
-            </div>
-            <!-- Right: Time Limit -->
-            <div class="col-md-6">
-              <label class="fw-semibold mb-1">Time Limit</label>
-              <div id="time_limit" class="p-2 rounded mb-2" style="background:#101826; border:1px solid #2b3a55;"></div>
-            </div>
-          </div>
-          <!-- Instruction at the bottom -->
-          <div class="row g-3 mb-3">
-            <div class="col-12">
-              <label class="fw-semibold mb-1">Instruction</label>
-              <div id="problem_description" class="p-2 rounded" style="background:#101826; border:1px solid #2b3a55; min-height:120px; white-space:pre-line; font-size: 12px;"></div>
-            </div>
-          </div>
-          <!-- TEST CASES -->
-          <div class="row g-2">
-            <div class="col-12">
-              <label class="fw-semibold mb-2">Test Cases</label>
-              <div class="row g-2" id="test_cases_container"></div>
-            </div>
-          </div>
+
+        <div class="modal-footer border-0 d-flex justify-content-between pt-0">
+          <button type="button" class="btn btn-outline-light px-4" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-success px-4" id="answerButton">Answer</button>
         </div>
-      </div>
-      <!-- Footer -->
-      <div class="modal-footer border-0 d-flex justify-content-between pt-0">
-        <button type="button" class="btn btn-outline-light px-4" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-success px-4" id="answerButton">Answer</button>
       </div>
     </div>
   </div>
-</div>
-
-
 
   {% include "partials/footer.html" %}
   {% include "partials/scripts.html" %}
-
-  <!-- SEARCH & FILTER JS -->
-  <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const form = document.querySelector('form');
-  const searchInput = form.querySelector('input[name="q"]');
-  const filterButtons = document.querySelectorAll('button[name="filter"]');
-  const currentFilter = "{{ filter_type|default:'' }}";
-
-  filterButtons.forEach(btn => {
-    btn.addEventListener('click', function(e) {
-      const clickedFilter = this.dataset.filter;
-      const searchValue = searchInput.value.trim();
-      if (currentFilter === clickedFilter) {
-        e.preventDefault();
-        const url = new URL(window.location.href);
-        url.searchParams.delete('filter');
-        if (searchValue) url.searchParams.set('q', searchValue);
-        window.location.href = url.toString();
-      }
-    });
-  });
-
-  searchInput.addEventListener('input', function() {
-    if (this.value.trim() === '') {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('q');
-      window.location.href = url.toString();
-    }
-  });
-
-  form.addEventListener('submit', function(e) {
-    if (searchInput.value.trim() === '') {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('q');
-      if (currentFilter) url.searchParams.set('filter', currentFilter);
-      window.location.href = url.toString();
-      e.preventDefault();
-    }
-  });
-});
-  </script>
-
- <script>
-document.querySelectorAll('.problem-card').forEach(card => {
-  card.addEventListener('click', function() {
-    const problemId = this.dataset.problemId;
-    if (!problemId) return;
-
-    fetch(`/problem/${problemId}/details/`)
-      .then(res => res.json())
-      .then(data => {
-        // Fill in modal data
-        document.getElementById('problem_title').textContent = data.title;
-        document.getElementById('problem_description').textContent = data.description;
-        document.getElementById('problem_type').textContent = data.type;
-        document.getElementById('total_score').textContent = data.score;
-        document.getElementById('time_limit').textContent = data.time_limit;
-        document.getElementById('due_date').textContent = "Due: " + data.due_date;
-
-                // Populate test cases
-        const container = document.getElementById('test_cases_container');
-        container.innerHTML = '';
-
-        data.test_cases.forEach((tc, index) => {
-          const col = document.createElement('div');
-          col.className = 'col-12';
-
-          if (index === 2) { // Hide Test Case 3 (0-based index)
-            col.innerHTML = `
-              <div class="p-3 mb-3 rounded text-center" style="background:#1e2b4d; border:1px dashed #3b4b6b;">
-                <span class="badge bg-secondary px-3 py-2">Test Case 3 Hidden</span>
-              </div>
-            `;
-          } else {
-            col.innerHTML = `
-              <div class="p-2 mb-2 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
-                <strong>Input ${index + 1}:</strong>
-                <pre style="margin:0; white-space:pre-wrap;">${tc.input}</pre>
-              </div>
-              <div class="p-2 mb-3 rounded" style="background:#121f3d; border:1px solid #2b3a55;">
-                <strong>Output ${index + 1}:</strong>
-                <pre style="margin:0; white-space:pre-wrap;">${tc.output}</pre>
-              </div>
-            `;
-          }
-
-          container.appendChild(col);
-        });
-
-
-        // Get reference to Answer button
-        const answerBtn = document.getElementById('answerButton');
-
-        // ✅ Disable button if problem already answered
-        if (data.answered === true) {
-          answerBtn.disabled = true;
-          answerBtn.textContent = "Answered";
-          answerBtn.classList.remove("btn-success");
-          answerBtn.classList.add("btn-secondary");
-        } else {
-          answerBtn.disabled = false;
-          answerBtn.textContent = "Answer";
-          answerBtn.classList.add("btn-success");
-          answerBtn.classList.remove("btn-secondary");
-        }
-
-        // Set Answer button link dynamically
-        answerBtn.onclick = () => {
-          if (!data.answered) {
-            window.location.href = `/playground/${problemId}/`;
-          }
-        };
-
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('problemDetailsModal'));
-        modal.show();
-      })
-      .catch(err => console.error('Error fetching problem details:', err));
-  });
-});
-</script>
-
 
   <style>
     .btn-success { background-color: #00C98D; border: none; }
@@ -329,4 +186,4 @@ document.querySelectorAll('.problem-card').forEach(card => {
     .small-placeholder::placeholder { font-size: 0.65rem; color: #b0b0b0; }
   </style>
 </body>
-</html>
+{% endblock %}

@@ -1,12 +1,10 @@
+{%extends "base.html"%}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Playground - {{ problem.problem_title }}</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<link rel="icon" type="image/png" href="{% static 'img/favicon.ico' %}">
+
+
+{% block content %}
+
+
 <style>
 body { background-color: #1E2835; color: #e0e0e0; }
 .card { background-color: #212529; color: #e0e0e0; border-radius: 8px; border: 1px solid #2b3a55; margin-bottom: 15px; }
@@ -29,8 +27,7 @@ textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1
   color: #28a745;
 }
 </style>
-</head>
-<body>
+
 <div class="container-fluid mt-4">
   <div class="row">
     <!-- Problem Details -->
@@ -54,7 +51,7 @@ textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1
     <!-- Code Editor -->
     <div class="col-md-6">
       <div class="card editor-container">
-        <select id="language" class="form-select language-select bg-dark text-white">
+        <select id="language" class="form-select language-select text-white" style = "background-color: black;">
           <option value="python">Python</option>
           <option value="c">C</option>
           <option value="cpp">C++</option>
@@ -91,9 +88,10 @@ textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1
   <div class="card">
     <div class="card-header">Expected Output</div>
     <div class="card-body">
+      {% with total=problem.problemtestcase_set.all|length %}
       {% for tc in problem.problemtestcase_set.all %}
         <div class="test-case-box">
-          {% if forloop.counter == 3 %}
+          {% if forloop.counter == total %}
             <!-- Hidden: show status badge only -->
             <span id="tcStatus{{ forloop.counter }}" class="badge bg-secondary">Hidden</span>
           {% else %}
@@ -104,6 +102,7 @@ textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1
       {% empty %}
         <div>No expected outputs available.</div>
       {% endfor %}
+      {% endwith %}
       <div class="mt-3">
         <span id="studentScoreBadge" class="badge bg-info text-dark" style="font-size:1rem;">
           Score: <span id="studentScoreValue">0</span>/<span id="studentScoreTotal">{{ problem.total_score }}</span>
@@ -170,331 +169,7 @@ textarea#userInput { width: 100%; background: #12181f; color: #00ff99; border: 1
   </div>
 </div>
 
-<!-- Ace Editor -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-language_tools.js"></script>
-<script>
-let editor = ace.edit("codeEditor");
-editor.setTheme("ace/theme/dracula");
-editor.session.setMode("ace/mode/python");
-editor.setOptions({
-  enableBasicAutocompletion: true,
-  enableLiveAutocompletion: true,
-  fontSize: "14px",
-  showPrintMargin: false,
-  highlightActiveLine: true,
-  tabSize: 4,
-  useSoftTabs: true
-});
-
-const languageModes = {
-  python: "ace/mode/python",
-  c: "ace/mode/c_cpp",
-  cpp: "ace/mode/c_cpp",
-  java: "ace/mode/java"
-};
-document.getElementById("language").addEventListener("change", e => {
-  editor.session.setMode(languageModes[e.target.value]);
-});
-
-function getCode() { return editor.getValue(); }
-
-function getProblemTestCount() {
-  const meta = document.getElementById('problemMeta');
-  return parseInt(meta?.dataset?.testCount || '0', 10);
-}
-function getProblemTotalScore() {
-  const meta = document.getElementById('problemMeta');
-  return parseInt(meta?.dataset?.totalScore || '0', 10);
-}
-
-function animateTestUpdates(testResults) {
-  const totalPoints = getProblemTestCount() * 10;
-  let runningScore = 0;
-
-  testResults.forEach((res, idx) => {
-    const delay = idx * 350;
-    setTimeout(() => {
-      const id = `tcStatus${idx+1}`;
-      const el = document.getElementById(id);
-      if (!el) return;
-      if (res === true) {
-        el.className = 'badge bg-success';
-        el.textContent = `PASSED`;
-        runningScore += 10;
-      } else if (res === false) {
-        el.className = 'badge bg-danger';
-        el.textContent = `FAILED`;
-      } else {
-        el.className = 'badge bg-secondary';
-        el.textContent = `Hidden`;
-      }
-      document.getElementById('studentScoreValue').textContent = runningScore;
-      document.getElementById('studentScoreTotal').textContent = totalPoints;
-    }, delay);
-  });
-}
-
-function parseResultSummary(resultSummary) {
-  const lines = (resultSummary || '').split('\n');
-  const testCount = getProblemTestCount();
-  const results = new Array(testCount).fill(null);
-  lines.forEach(line => {
-    const m = line.match(/Test\s*(\d+):\s*(Passed|Failed|Error)/i);
-    if (m) {
-      const idx = parseInt(m[1], 10) - 1;
-      const status = m[2].toLowerCase();
-      if (status === 'passed') results[idx] = true;
-      else results[idx] = false;
-    }
-  });
-  return results;
-}
-
-async function runCode(checkMode=false) {
-  const modalOutput = checkMode ? document.getElementById('checkResult') : document.getElementById('terminalOutput');
-  const checkLoading = document.getElementById('checkLoading');
-
-  if (checkMode) {
-    modalOutput.textContent = "";
-    checkLoading.style.display = "flex";
-  } else {
-    modalOutput.textContent = "Running...";
-  }
-
-  try {
-    const code = getCode();
-    const lang = document.getElementById('language').value;
-    const problemId = "{{ problem.problem_id }}";
-    const stdinData = document.getElementById('userInput').value;
-    const url = "{% url 'run_playground_code' %}";
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": "{{ csrf_token }}"
-      },
-      body: JSON.stringify({
-        code: code,
-        language: lang,
-        check_mode: checkMode,
-        problem_id: problemId,
-        stdin: stdinData
-      })
-    });
-
-    const data = await response.json();
-
-    if (checkMode) {
-      checkLoading.style.display = "none";
-      if (data.error) { modalOutput.textContent = "⚠️ " + data.error; return; }
-
-      const testResults = parseResultSummary(data.result_summary);
-      animateTestUpdates(testResults);
-      modalOutput.innerHTML = `<pre style="color:#28a745;">${data.result_summary}</pre>`;
-      document.getElementById('submitBtn').style.display = 'inline-block';
-    } else {
-      modalOutput.textContent = data.output || "No output.";
-    }
-
-  } catch (err) {
-    if (checkMode) checkLoading.style.display = "none";
-    modalOutput.textContent = "⚠️ Failed to connect to server: " + err.message;
-    console.error(err);
-  }
-}
-
-let hasSubmitted = false;
-
-// Named beforeunload handler so we can remove it when needed
-function beforeUnloadHandler(e) {
-  if (!hasSubmitted) {
-    e.preventDefault();
-    e.returnValue = "Are you sure you want to leave? Your work will be submitted automatically.";
-    autoSubmitOnTimeout();
-    hasSubmitted = true;
-  }
-}
-window.addEventListener("beforeunload", beforeUnloadHandler);
-
-async function submitCode() {
-  const checkResultDiv = document.getElementById('checkResult');
-  const checkLoading = document.getElementById('checkLoading');
-
-  checkResultDiv.textContent = "";
-  checkLoading.style.display = "flex";
-
-  try {
-    const code = getCode();
-    const problemId = "{{ problem.problem_id }}";
-    const lang = document.getElementById('language').value;
-
-    const response = await fetch(`/submit_problem/${problemId}/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": "{{ csrf_token }}"
-      },
-      body: JSON.stringify({
-        problem_id: problemId,
-        code: code,
-        language: lang
-      })
-    });
-
-    const data = await response.json();
-    checkLoading.style.display = "none";
-
-    if (data.success) {
-      const testResults = parseResultSummary(data.result_summary);
-      animateTestUpdates(testResults);
-
-      const finalScore = data.score ?? (testResults.filter(Boolean).length * 10);
-      document.getElementById('studentScoreValue').textContent = finalScore;
-      document.getElementById('studentScoreTotal').textContent = (getProblemTestCount() * 10);
-
-      checkResultDiv.innerHTML = `<pre style="color:#28a745;">${data.result_summary}</pre>`;
-
-      // ✅ Disable unload prompt after manual submit
-      hasSubmitted = true;
-      window.removeEventListener("beforeunload", beforeUnloadHandler);
-
-      localStorage.removeItem(`problem_timer_{{ problem.problem_id }}`);
-      setTimeout(() => {
-        window.location.href = data.redirect_url || "{% url 'StudentClass' %}";
-      }, 1500);
-    } else {
-      checkResultDiv.textContent = "⚠️ " + (data.message || "Submission failed.");
-    }
-  } catch (error) {
-    checkLoading.style.display = "none";
-    checkResultDiv.textContent = "⚠️ Submission failed: " + error.message;
-    console.error(error);
-  }
-}
-
-// =============================
-//  COUNTDOWN TIMER (Persistent)
-// =============================
-(function startPersistentCountdown() {
-  const timerMeta = document.getElementById('problemTimer');
-  if (!timerMeta) return;
-
-  const problemId = "{{ problem.problem_id }}";
-  const storageKey = `problem_timer_${problemId}`;
-  const timeLimitMinutes = parseInt(timerMeta.dataset.timelimit || '0', 10);
-  if (isNaN(timeLimitMinutes) || timeLimitMinutes <= 0) return;
-
-  const timerDisplay = document.getElementById('timerDisplay');
-  let deadline;
-
-  const savedData = localStorage.getItem(storageKey);
-  if (savedData) {
-    const parsed = JSON.parse(savedData);
-    deadline = new Date(parsed.deadline);
-  } else {
-    const now = new Date();
-    deadline = new Date(now.getTime() + timeLimitMinutes * 60 * 1000);
-    localStorage.setItem(storageKey, JSON.stringify({ deadline: deadline.toISOString() }));
-  }
-
-  const tick = setInterval(() => {
-    const now = new Date();
-    const remaining = Math.floor((deadline - now) / 1000);
-
-    if (remaining <= 0) {
-      clearInterval(tick);
-      timerDisplay.textContent = "⏱️ Time’s up!";
-      timerDisplay.classList.remove('text-warning');
-      timerDisplay.classList.add('text-danger');
-      localStorage.removeItem(storageKey);
-      alert("Time is up! Your code will be submitted automatically.");
-      autoSubmitOnTimeout();
-      return;
-    }
-
-    const m = Math.floor(remaining / 60);
-    const s = remaining % 60;
-    timerDisplay.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  }, 1000);
-})();
-
-// =============================
-// AUTO SUBMIT ON TIMEOUT
-// =============================
-async function autoSubmitOnTimeout() {
-  const checkResultDiv = document.getElementById('checkResult');
-  const checkLoading = document.getElementById('checkLoading');
-
-  checkResultDiv.textContent = "";
-  checkLoading.style.display = "flex";
-
-  try {
-    const code = getCode();
-    const problemId = "{{ problem.problem_id }}";
-    const lang = document.getElementById('language').value;
-
-    const response = await fetch(`/submit_problem/${problemId}/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": "{{ csrf_token }}"
-      },
-      body: JSON.stringify({
-        problem_id: problemId,
-        code: code,
-        language: lang
-      })
-    });
-
-    const data = await response.json();
-    checkLoading.style.display = "none";
-    localStorage.removeItem(`problem_timer_${problemId}`);
-
-    // ✅ Disable unload handler after auto-submit
-    hasSubmitted = true;
-    window.removeEventListener("beforeunload", beforeUnloadHandler);
-
-    if (data.success) {
-      alert("✅ Time’s up! Your code has been submitted automatically.");
-      window.location.href = data.redirect_url;
-    } else {
-      alert("⚠️ Auto-submit failed. Redirecting...");
-      window.location.href = "{% url 'student_class_details' problem.class_id.class_id %}";
-    }
-  } catch (error) {
-    checkLoading.style.display = "none";
-    console.error(error);
-    alert("⚠️ Error during auto submission. Redirecting...");
-    window.location.href = "{% url 'student_class_details' problem.class_id.class_id %}";
-  }
-}
-
-// =============================
-//  PREVENT BACK NAVIGATION
-// =============================
-(function preventBackNavigation() {
-  history.pushState(null, null, location.href);
-  window.onpopstate = function () {
-    history.pushState(null, null, location.href);
-    alert("🚫 You cannot go back during the problem session.");
-  };
-})();
-
-// =============================
-//  DETECT TAB SWITCH OR PAGE CLOSE
-// =============================
-window.addEventListener("blur", () => {
-  if (!hasSubmitted) {
-    alert("🚫 You switched tabs! Your session will end for security.");
-    autoSubmitOnTimeout();
-    hasSubmitted = true;
-  }
-});
-</script>
+{% include "partials/scripts.html" %}
 
 
-
-</body>
-</html>
+{% endblock %}

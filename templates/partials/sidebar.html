@@ -63,7 +63,7 @@
       <li class="nav-item mb-4">
           <a href="#" class="d-flex flex-column align-items-center text-decoration-none text-white">
               <div class="profile-pic border-radius-md overflow-hidden mb-2">
-                  <img src="{% static 'img/default.png' %}" 
+                  <img src="{% if user.user_image and user.user_image.url %}{{ user.user_image.url }}{% else %}{% static 'img/image.png' %}{% endif %}" 
                       alt="Profile Picture" 
                       class="img-fluid rounded-circle profile-img">
               </div>
@@ -108,6 +108,7 @@
     </ul>
   </div>
   <div class="sidenav-footer px-3" style="padding-top: 25vh;">
+    
     <a class="btn btn-danger btn-sm mb-0 w-100" href="{% url 'logout' %}" type="button">Logout</a>
   </div>
 </aside>
