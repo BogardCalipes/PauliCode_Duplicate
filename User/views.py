@@ -704,18 +704,12 @@ def playground(request, problem_id):
 # ---------------- RUN & CHECK CODE ---------------- #
 @csrf_exempt
 def run_playground_code(request):
-    """Handles manual code execution and test case checking via Piston API."""
     if request.method != "POST":
         return JsonResponse({"error": "Invalid request method."}, status=400)
 
     tmp_dir = None
     try:
-        # Safely parse JSON input
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            return JsonResponse({"error": "Invalid JSON payload."}, status=400)
-
+        data = json.loads(request.body)
         code = data.get("code", "")
         language = (data.get("language", "python") or "python").lower()
         check_mode = data.get("check_mode", False)
@@ -726,67 +720,71 @@ def run_playground_code(request):
             return JsonResponse({"error": "Code cannot be empty."}, status=400)
 
         problem = get_object_or_404(Problem, pk=problem_id)
-
         tmp_dir = tempfile.mkdtemp(prefix="code_run_")
 
-        # Determine file name for each language
         extensions = {"python": "main.py", "c": "main.c", "cpp": "main.cpp", "java": "Main.java"}
-        source_name = extensions.get(language, "main.py")
-        source_path = os.path.join(tmp_dir, source_name)
+        source_path = os.path.join(tmp_dir, extensions.get(language, "main.py"))
+
         with open(source_path, "w", encoding="utf-8") as f:
             f.write(code)
 
-        # If test case mode
+        # ✅ Test case checking mode
         if check_mode:
-            testcases = ProblemTestCase.objects.filter(problem_id=problem)
-            if not testcases.exists():
-                return JsonResponse({"error": "No test cases found."}, status=404)
+            testcases = list(ProblemTestCase.objects.filter(problem_id=problem))
+            total_cases = len(testcases)
+            results = []
+            passed_count = 0
 
-            results, passed_count = [], 0
             for i, tc in enumerate(testcases, start=1):
                 expected = (tc.expected_output or "").strip()
                 raw_input = (tc.input_data or "").strip()
 
                 exec_res = execute_source(language, source_path, stdin_data=raw_input + "\n")
 
-                # Handle errors cleanly
                 if exec_res.get("error"):
                     results.append(f"❌ Test {i}: {exec_res['error']}")
                     continue
 
                 output = (exec_res.get("stdout") or "").strip()
-                if output == expected:
-                    results.append(f"✅ Test {i}: Passed")
-                    passed_count += 1
+
+                # ✅ Hidden test case logic
+                is_hidden = (
+                    (total_cases == 1) or
+                    (total_cases == 2 and i == 2) or
+                    (total_cases == 3 and i == 3)
+                )
+
+                if is_hidden:
+                    if output == expected:
+                        results.append(f"✅ Test {i}: Passed (Hidden Case)")
+                        passed_count += 1
+                    else:
+                        results.append(f"❌ Test {i}: Failed (Hidden Case)")
                 else:
-                    results.append(f"❌ Test {i}: Failed\nInput: {raw_input}\nExpected: {expected}\nGot: {output}")
+                    if output == expected:
+                        results.append(f"✅ Test {i}: Passed")
+                        passed_count += 1
+                    else:
+                        results.append(
+                            f"❌ Test {i}: Failed\nInput: {raw_input}\nExpected: {expected}\nGot: {output}"
+                        )
 
             return JsonResponse({
                 "result_summary": "\n".join(results),
                 "total_score": passed_count * 10,
             })
 
-        # Manual run mode
+        # Manual Run Mode
         exec_res = execute_source(language, source_path, stdin_data=stdin_data + "\n")
-        if exec_res.get("error"):
-            return JsonResponse({
-                "output": exec_res.get("stdout", ""),
-                "stderr": exec_res.get("stderr", ""),
-                "compile_error": exec_res.get("compile_error", ""),
-                "error": exec_res["error"]
-            })
-        else:
-            return JsonResponse({
-        "output": exec_res.get("stdout", "No output."),
-        "stderr": exec_res.get("stderr", ""),
-        "compile_error": exec_res.get("compile_error", ""),
-        "error": ""
-    })
-
+        return JsonResponse({
+            "output": exec_res.get("stdout", "No output."),
+            "stderr": exec_res.get("stderr", ""),
+            "compile_error": exec_res.get("compile_error", ""),
+            "error": exec_res.get("error", "")
+        })
 
     except Exception as e:
         return JsonResponse({"error": f"Server error: {str(e)}"}, status=500)
-
     finally:
         if tmp_dir and os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -796,76 +794,97 @@ def run_playground_code(request):
 def submit_problem(request, problem_id):
     """
     Handles code submission from students.
-    Runs test cases, gives score, and returns JSON response for modal display.
+    Runs test cases, hides hidden ones, gives score, and returns JSON response for modal display.
     """
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            code = data.get("code", "")
-            language = data.get("language", "python")
-        except Exception:
-            return JsonResponse({"success": False, "message": "Invalid JSON received."}, status=400)
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Invalid request method."}, status=400)
 
-        problem = get_object_or_404(Problem, pk=problem_id)
-        student = get_object_or_404(User, pk=request.session["school_id"])
+    try:
+        data = json.loads(request.body)
+        code = data.get("code", "")
+        language = data.get("language", "python")
+    except Exception:
+        return JsonResponse({"success": False, "message": "Invalid JSON received."}, status=400)
 
-        test_cases = ProblemTestCase.objects.filter(problem_id=problem)
-        total_cases = test_cases.count()
-        passed_cases = 0
-        score = 0
-        results = []
+    problem = get_object_or_404(Problem, pk=problem_id)
+    student = get_object_or_404(User, pk=request.session["school_id"])
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            ext_map = {"python": ".py", "c": ".c", "cpp": ".cpp", "java": ".java"}
-            ext = ext_map.get(language)
-            if not ext:
-                return JsonResponse({"success": False, "message": "Unsupported language selected."}, status=400)
+    test_cases = ProblemTestCase.objects.filter(problem_id=problem)
+    total_cases = test_cases.count()
+    passed_cases = 0
+    score = 0
+    results = []
 
-            source_path = os.path.join(tmp_dir, f"Main{ext}")
-            with open(source_path, "w") as src:
-                src.write(code)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        ext_map = {"python": ".py", "c": ".c", "cpp": ".cpp", "java": ".java"}
+        ext = ext_map.get(language)
+        if not ext:
+            return JsonResponse({"success": False, "message": "Unsupported language selected."}, status=400)
 
-            for i, tc in enumerate(test_cases, start=1):
-                raw_input = (tc.input_data or "").strip()
-                try:
-                    exec_res = execute_source(language, source_path, stdin_data=raw_input + ("\n" if raw_input else "\n"))
-                    if exec_res.get("compile_error") or exec_res.get("timeout") or exec_res.get("stderr"):
-                        results.append(f"❌ Test {i}: Error\n{exec_res.get('compile_error') or exec_res.get('stderr') or exec_res.get('timeout')}")
-                        continue
+        source_path = os.path.join(tmp_dir, f"Main{ext}")
+        with open(source_path, "w") as src:
+            src.write(code)
 
-                    out = (exec_res.get("stdout") or "").strip()
-                    expected = (tc.expected_output or "").strip()
-                    if out == expected:
-                        passed_cases += 1
-                        score += 10
-                        results.append(f"✅ Test {i}: Passed")
-                    else:
-                        results.append(f"❌ Test {i}: Failed\nInput: {raw_input}\nExpected: {expected}\nGot: {out}")
-                except Exception as e:
-                    results.append(f"❌ Test {i}: Exception\n{str(e)}")
+        for i, tc in enumerate(test_cases, start=1):
+            raw_input = (tc.input_data or "").strip()
+            expected = (tc.expected_output or "").strip()
+
+            try:
+                exec_res = execute_source(language, source_path, stdin_data=raw_input + ("\n" if raw_input else "\n"))
+
+                # Handle compile/runtime errors
+                if exec_res.get("compile_error") or exec_res.get("timeout") or exec_res.get("stderr"):
+                    results.append(f"❌ Test {i}: Error\n{exec_res.get('compile_error') or exec_res.get('stderr') or exec_res.get('timeout')}")
                     continue
 
-        Submission.objects.create(
-            problem_id=problem,
-            student_id=student,
-            code=code,
-            score=score,
-            submitted_at=timezone.now()
-        )
+                out = (exec_res.get("stdout") or "").strip()
 
-        result_summary = "\n".join(results) + f"\n\n{passed_cases}/{total_cases} test cases passed. Score: {score}"
-        redirect_url = reverse("student_class_details", args=[problem.class_id.class_id])
+                # ✅ Hidden test case logic
+                # Hide details for last test case or based on count rules
+                is_hidden = (
+                    (total_cases == 1) or
+                    (total_cases == 2 and i == 2) or
+                    (total_cases == 3 and i == 3)
+                )
 
-        return JsonResponse({
-            "success": True,
-            "result_summary": result_summary,
-            "score": score,
-            "passed_cases": passed_cases,
-            "total_cases": total_cases,
-            "redirect_url": redirect_url
-        })
+                if out == expected:
+                    passed_cases += 1
+                    score += 10
+                    if is_hidden:
+                        results.append(f"✅ Test {i}: Passed (Hidden Case)")
+                    else:
+                        results.append(f"✅ Test {i}: Passed")
+                else:
+                    if is_hidden:
+                        results.append(f"❌ Test {i}: Failed (Hidden Case)")
+                    else:
+                        results.append(f"❌ Test {i}: Failed\nInput: {raw_input}\nExpected: {expected}\nGot: {out}")
 
-    return JsonResponse({"success": False, "message": "Invalid request method."}, status=400)
+            except Exception as e:
+                results.append(f"❌ Test {i}: Exception\n{str(e)}")
+                continue
+
+    # ✅ Save submission
+    Submission.objects.create(
+        problem_id=problem,
+        student_id=student,
+        code=code,
+        score=score,
+        submitted_at=timezone.now()
+    )
+
+    result_summary = "\n".join(results) + f"\n\n{passed_cases}/{total_cases} test cases passed. Score: {score}"
+    redirect_url = reverse("student_class_details", args=[problem.class_id.class_id])
+
+    return JsonResponse({
+        "success": True,
+        "result_summary": result_summary,
+        "score": score,
+        "passed_cases": passed_cases,
+        "total_cases": total_cases,
+        "redirect_url": redirect_url
+    })
+
 
 def count_expected_inputs(test_output):
     """
